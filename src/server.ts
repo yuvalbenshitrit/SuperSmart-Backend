@@ -3,8 +3,6 @@ const app = express();
 import dotenv from "dotenv";
 dotenv.config();
 import mongoose from "mongoose";
-import postsRoutes from "./routes/post";
-import commentsRoutes from "./routes/comment";
 import itemRoutes from "./routes/item";
 import bodyParser from "body-parser";
 import authRoutes from "./routes/auth";
@@ -26,8 +24,7 @@ app.use((req, res, next) => {
 });
 
 
-app.use("/posts", postsRoutes);
-app.use("/comments", commentsRoutes);
+
 app.use("/auth", authRoutes);
 app.use("/public/", express.static("public"));  // middleware to serve static files
 app.use("/storage/", express.static("storage"));

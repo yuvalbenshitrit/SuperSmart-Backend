@@ -13,7 +13,7 @@ export interface IItem extends Document {
   name: string;
   category: string;
   storePrices: IStorePrice[];
-  suggestedAlternatives: ISuggestedAlternative[];
+  id: string;
 }
 
 const storePriceSchema = new Schema<IStorePrice>({
@@ -21,15 +21,13 @@ const storePriceSchema = new Schema<IStorePrice>({
   price: { type: Number, required: true },
 });
 
-const suggestedAlternativeSchema = new Schema<ISuggestedAlternative>({
-  itemId: { type: Schema.Types.ObjectId, ref: "Item", required: true },
-});
+
 
 const itemSchema = new Schema<IItem>({
   name: { type: String, required: true },
   category: { type: String, required: true },
   storePrices: { type: [storePriceSchema], default: [] },
-  suggestedAlternatives: { type: [suggestedAlternativeSchema], default: [] },
+  id: { type: String, required: true, unique: true },
 });
 
 const itemModel = mongoose.model<IItem>("Item", itemSchema);

@@ -1,9 +1,18 @@
 import { Request, Response } from "express";
 import itemModel from "../models/item";
+import mongoose from "mongoose";
 
 const createItem = async (req: Request, res: Response) => {
   try {
-    const newItem = new itemModel(req.body);
+    // Validate request body
+    if (!req.body.name || !req.body.category) {
+      return res.status(400).json({ message: "Missing required fields: name and category" });
+    }
+
+    const newItem = new itemModel({
+      ...req.body,
+      id: new mongoose.Types.ObjectId().toString(),
+    });
     const savedItem = await newItem.save();
     res.status(201).json(savedItem);
   } catch (error) {
@@ -20,32 +29,52 @@ const getItems = async (req: Request, res: Response) => {
   }
 };
 
-const getItemById = async (req: Request, res: Response): Promise<Response> => {
+const getItemById = async (req: Request, res: Response) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid item ID" });
+    }
+
     const item = await itemModel.findById(req.params.id);
     if (!item) {
       return res.status(404).json({ message: "Item not found" });
     }
-    return res.status(200).json(item);
-  } catch (error) {
-    return res.status(500).json({ message: (error as Error).message });
-  }
-};
-
-const updateItem = async (req: Request, res: Response) => {
-  try {
-    const updatedItem = await itemModel.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!updatedItem) {
-      return res.status(404).json({ message: "Item not found" });
-    }
-    res.status(200).json(updatedItem);
+    res.status(200).json(item);
   } catch (error) {
     res.status(500).json({ message: (error as Error).message });
   }
 };
 
+const updateItem = async (req: Request, res: Response) => {
+  try {
+    const itemId = req.params.id;
+
+    // Validate itemId
+    if (!mongoose.isValidObjectId(itemId)) {
+      return res.status(400).json({ message: "Invalid item ID" });
+    }
+
+    // Check if the item exists
+    const existingItem = await itemModel.findById(itemId);
+    if (!existingItem) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+
+    // Update the item
+    const updatedItem = await itemModel.findByIdAndUpdate(itemId, req.body, { new: true });
+    res.status(200).json(updatedItem);
+  } catch (error) {
+    console.error("Error updating item:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 const deleteItem = async (req: Request, res: Response) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid item ID" });
+    }
+
     const deletedItem = await itemModel.findByIdAndDelete(req.params.id);
     if (!deletedItem) {
       return res.status(404).json({ message: "Item not found" });

@@ -1,13 +1,18 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface IStore extends Document {
+  storeId: string;
   name: string;
 }
 
-const storeSchema = new Schema<IStore>({
-  name: { type: String, required: true },
-});
+const storeSchema = new Schema<IStore>(
+  {
+    storeId: { type: String, required: true, unique: true }, // Ensure `storeId` is unique
+    name: { type: String, required: true },
+  },
+  { timestamps: true } 
+);
 
-const storeModel = mongoose.model<IStore>("Store", storeSchema);
+const StoreModel = mongoose.model<IStore>("Store", storeSchema);
 
-export default storeModel;
+export default StoreModel;

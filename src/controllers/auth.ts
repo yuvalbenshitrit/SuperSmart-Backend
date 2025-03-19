@@ -1,3 +1,4 @@
+
 import { Request, Response, NextFunction } from "express";
 import userModel, { iUser } from "../models/user";
 import bcrypt from "bcrypt";
@@ -5,6 +6,7 @@ import jwt from "jsonwebtoken";
 import { Document } from "mongoose";
 import { isEmail } from "validator";
 import { OAuth2Client } from 'google-auth-library';
+import mongoose from "mongoose";
 
 
 const client = new OAuth2Client();
@@ -228,7 +230,9 @@ const updateUser = async (req: UpdateUserRequest, res: Response) => {
     const userId = req.params.id;
     const updateData = req.body;
 
-    console.log("Updating user:", userId, updateData);
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
 
     const user = await userModel.findById(userId);
     if (!user) {
@@ -236,14 +240,12 @@ const updateUser = async (req: UpdateUserRequest, res: Response) => {
     }
 
     const updatedUser = await userModel.findByIdAndUpdate(userId, updateData, { new: true });
-
     return res.status(200).json(updatedUser);
   } catch (error) {
     console.error("Error updating user:", error);
-    return res.status(500).json({ message: "Internal server error", error });
+    return res.status(400).json({ message: "Bad request", error });
   }
 };
-    
 
 
   
@@ -303,24 +305,23 @@ export const authMiddleware = (
 ) => {
   const tokenHeader = req.headers["authorization"];
   const token = tokenHeader && tokenHeader.split(" ")[1];
+
   if (!token) {
-    res.status(400).send("Access denied");
-    return;
+    return res.status(400).send("Access denied: Token is missing");
   }
+
   if (process.env.TOKEN_SECRET === undefined) {
-    res.status(400).send("server error");
-    return;
+    return res.status(500).send("Server error: TOKEN_SECRET is not defined");
   }
+
   jwt.verify(token, process.env.TOKEN_SECRET, (err, payload) => {
     if (err) {
-      res.status(400).send("Access denied");
+      return res.status(404).send("Access denied: Invalid token");
     } else {
       const userId = (payload as Payload)._id;
       req.params.userId = userId;
       next();
     }
-
-    
   });
 };
 

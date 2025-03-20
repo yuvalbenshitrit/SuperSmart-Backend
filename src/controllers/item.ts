@@ -9,13 +9,25 @@ const createItem = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Missing required fields: name and category" });
     }
 
+    // Validate storeId in storePrices if provided
+    if (req.body.storePrices && Array.isArray(req.body.storePrices)) {
+      for (const storePrice of req.body.storePrices) {
+        if (!mongoose.isValidObjectId(storePrice.storeId)) {
+          return res.status(400).json({ message: "Invalid storeId in storePrices" });
+        }
+      }
+    }
+
+    // Create the item without manually adding an 'id' field
     const newItem = new itemModel({
       ...req.body,
-      id: new mongoose.Types.ObjectId().toString(),
+      // Remove the manual 'id' field as MongoDB will create _id automatically
     });
+    
     const savedItem = await newItem.save();
     res.status(201).json(savedItem);
   } catch (error) {
+    console.error("Error creating item:", error);
     res.status(500).json({ message: (error as Error).message });
   }
 };

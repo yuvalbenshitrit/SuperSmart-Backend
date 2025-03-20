@@ -1,10 +1,57 @@
+### Create a new item
+POST http://localhost:3000/items
+Content-Type: application/json
+
+{
+  "name": "Sample Item3",
+  "category": "Sample Category",
+  "storePrices": [
+    {
+      "storeId": "67dbd57e1f125b07a443683b",
+      "price": 19.99
+    }
+  ]
+}
+
 ### Create a new store
 POST http://localhost:3000/stores
 Content-Type: application/json
 
 {
-  "storeId": "store1233",
-  "name": "My Storee"
+  "name": "My Store"
+}
+### Get all items
+GET http://localhost:3000/items
+
+### Get item by ID
+GET http://localhost:3000/items/item123
+
+### Update item by ID
+PUT http://localhost:3000/items/item123
+Content-Type: application/json
+
+{
+  "name": "Updated Item Name",
+  "category": "Updated Category",
+  "storePrices": [
+    {
+      "storeId": "store123",
+      "price": 29.99
+    }
+  ]
+}
+
+### Delete item by ID
+DELETE http://localhost:3000/items/item123
+
+
+### Create a new store
+POST http://localhost:3000/stores
+Content-Type: application/json
+
+{
+  "name": "My Store1"
+  
 }
 
 ### Get all stores

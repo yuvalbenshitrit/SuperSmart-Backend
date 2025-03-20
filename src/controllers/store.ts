@@ -3,25 +3,20 @@ import StoreModel from "../models/store";
 
 const createStore = async (req: Request, res: Response) => {
   try {
-    console.log("Request Body:", req.body); // Log the request body
-    const { storeId, name } = req.body;
+    console.log("Request Body:", req.body);
+    const { name } = req.body;
 
-    if (!storeId || !name) {
-      return res.status(400).json({ message: "storeId and name are required" });
+    if (!name) {
+      return res.status(400).json({ message: "Store name is required" });
     }
 
-    const existingStore = await StoreModel.findOne({ storeId });
-    if (existingStore) {
-      return res.status(400).json({ message: "storeId must be unique" });
-    }
-
-    const newStore = new StoreModel({ storeId, name });
+    const newStore = new StoreModel({ name });
     await newStore.save();
 
     res.status(201).json(newStore);
   } catch (error) {
     console.error("Error creating store:", error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: (error as Error).message });
   }
 };
 

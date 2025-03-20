@@ -1,60 +1,98 @@
-import { Request, Response, NextFunction } from "express";
-import storeModel from "../models/store";
+import { Request, Response } from "express";
+import StoreModel from "../models/store";
 
-export const createStore = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+const createStore = async (req: Request, res: Response) => {
   try {
-    const newStore = new storeModel(req.body);
-    const savedStore = await newStore.save();
-    res.status(201).json(savedStore);
+    console.log("Request Body:", req.body); // Log the request body
+    const { storeId, name } = req.body;
+
+    if (!storeId || !name) {
+      return res.status(400).json({ message: "storeId and name are required" });
+    }
+
+    const existingStore = await StoreModel.findOne({ storeId });
+    if (existingStore) {
+      return res.status(400).json({ message: "storeId must be unique" });
+    }
+
+    const newStore = new StoreModel({ storeId, name });
+    await newStore.save();
+
+    res.status(201).json(newStore);
   } catch (error) {
-    next(error);
+    console.error("Error creating store:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
-export const getStores = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+const getStores = async (req: Request, res: Response) => {
   try {
-    const stores = await storeModel.find();
+    const stores = await StoreModel.find();
     res.status(200).json(stores);
   } catch (error) {
-    next(error);
+    console.error("Error fetching stores:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
-export const getStoreById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+const getStoreById = async (req: Request, res: Response) => {
   try {
-    const store = await storeModel.findById(req.params.id);
+    const { id } = req.params;
+    const store = await StoreModel.findOne({ storeId: id }); // Query by `storeId`
+
     if (!store) {
-      res.status(404).json({ message: "Store not found" });
-      return;
+      return res.status(404).json({ message: "Store not found" });
     }
+
     res.status(200).json(store);
   } catch (error) {
-    next(error);
+    console.error("Error fetching store by ID:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
-export const updateStore = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+const updateStore = async (req: Request, res: Response) => {
   try {
-    const updatedStore = await storeModel.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const { id } = req.params;
+    const { name } = req.body;
+
+    const updatedStore = await StoreModel.findOneAndUpdate(
+      { storeId: id },
+      { name },
+      { new: true } // Return the updated document
+    );
+
     if (!updatedStore) {
-      res.status(404).json({ message: "Store not found" });
-      return;
+      return res.status(404).json({ message: "Store not found" });
     }
+
     res.status(200).json(updatedStore);
   } catch (error) {
-    next(error);
+    console.error("Error updating store:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
-export const deleteStore = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+const deleteStore = async (req: Request, res: Response) => {
   try {
-    const deletedStore = await storeModel.findByIdAndDelete(req.params.id);
+    const { id } = req.params;
+    const deletedStore = await StoreModel.findOneAndDelete({ storeId: id });
+
     if (!deletedStore) {
-      res.status(404).json({ message: "Store not found" });
-      return;
+      return res.status(404).json({ message: "Store not found" });
     }
+
     res.status(200).json({ message: "Store deleted successfully" });
   } catch (error) {
-    next(error);
+    console.error("Error deleting store:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
+};
+
+export default {
+  createStore,
+  getStores,
+  getStoreById,
+  updateStore,
+  deleteStore,
 };

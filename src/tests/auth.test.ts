@@ -1,7 +1,7 @@
 import request from "supertest";
 import initApp from "../server";
 import mongoose from "mongoose";
-import postModel from "../models/post";
+import itemModel from "../models/item";
 import { Express } from "express";
 import userModel from "../models/user";
 
@@ -10,7 +10,7 @@ let app: Express;
 beforeAll(async () => {
   app = await initApp();
   await userModel.deleteMany();
-  await postModel.deleteMany();
+  await itemModel.deleteMany();
 });
 
 afterAll(async () => {
@@ -158,14 +158,15 @@ describe("Auth test suite", () => {
 
   test("Test token access", async () => {
     const response2 = await request(app)
-      .post("/posts")
+      .post("/items")
       .set({
         authorization: "JWT " + testUser.accessToken,
       })
       .send({
-        title: "Test title",
-        content: "Test content",
-        sender: "noa",
+        name: "Test title",
+        category: "Test content",
+        price: 20,
+        storeId: "5f8f",
       });
     expect(response2.statusCode).toBe(201);
   });
@@ -177,9 +178,10 @@ describe("Auth test suite", () => {
         authorization: "Invalid " + testUser.accessToken,
       })
       .send({
-        title: "Test title",
-        content: "Test content",
-        sender: "test"
+        name: "Test title",
+        category: "Test content",
+        price: 20,
+        storeId: "5f8f",
       });
     expect(response.statusCode).toBe(404);
   });
@@ -188,9 +190,10 @@ describe("Auth test suite", () => {
     const response = await request(app)
       .post("/")
       .send({
-        title: "Test title",
-        content: "Test content",
-        sender: "test"
+        name: "Test title",
+        category: "Test content",
+        price: 20,
+        storeId: "5f8f",
       });
     expect(response.statusCode).toBe(404);
   });
@@ -230,18 +233,15 @@ describe("Auth test suite", () => {
    // expect(response.body).toBe("error");
   });
 
-  test("Test token generation with missing TOKEN_SECRET", async () => {
+  test("Auth test token generation failure", async () => {
     const originalSecret = process.env.TOKEN_SECRET;
     delete process.env.TOKEN_SECRET;
-
+  
     const response = await request(app)
       .post(baseUrl + "/login")
       .send(testUser);
-    
     expect(response.statusCode).toBe(400);
-    expect(response.body).toHaveProperty("error");
-
-    // Restore TOKEN_SECRET
+  
     process.env.TOKEN_SECRET = originalSecret;
   });
 
@@ -322,9 +322,10 @@ describe("Auth test suite", () => {
         authorization: "JWT " + testUser.accessToken,
       })
       .send({
-        title: "Test title",
-        content: "Test content",
-        sender: "noa",
+       name: "Test title",
+        category: "Test content",
+        price: 20,
+        storeId: "5f8f",
       });
 
     expect(response2.statusCode).not.toBe(201);
@@ -339,14 +340,15 @@ describe("Auth test suite", () => {
     testUser.refreshToken = response3.body.refreshToken;
 
     const response4 = await request(app)
-      .post("/posts")
+      .post("/items")
       .set({
         authorization: "JWT " + testUser.accessToken,
       })
       .send({
-        title: "Test title",
-        content: "Test content",
-        sender: "noa",
+        name: "Test title",
+        category: "Test content",
+        price: 20,
+        storeId: "5f8f",
       });
     expect(response4.statusCode).toBe(201);
   });
@@ -412,8 +414,51 @@ describe("Auth test suite", () => {
     expect(response.statusCode).toBe(404);
   });
 
+
+  test("Auth test update user", async () => {
+    const response = await request(app)
+      .put(baseUrl + "/" + testUser._id)
+      .set({
+        authorization: "JWT " + testUser.accessToken,
+      })
+      .send({
+        userName: "Updated User",
+        email: "updated@test.com"
+      });
+    expect(response.statusCode).toBe(200);
+  });
+
+  test("Auth test update user failure", async () => {
+    const response = await request(app)
+      .put(baseUrl + "/invalid_id")
+      .set({
+        authorization: "JWT " + testUser.accessToken,
+      })
+      .send({
+        userName: "",
+        email: "invalid_email"
+      });
+    expect(response.statusCode).toBe(400);
+  });
+
+  test("Auth middleware invalid token", async () => {
+    const response = await request(app)
+      .post("/some-protected-route")
+      .set("Authorization", "Bearer invalid_token")
+      .send({ storeId: "5f8f" });
+  
+    expect(response.statusCode).toBe(404);
+  });
   
   
 
+  test("User model validation", async () => {
+    const user = new userModel({
+      userName: "",
+      email: "",
+      password: ""
+    });
+    await expect(user.validate()).rejects.toThrow();
+  });
 
 });

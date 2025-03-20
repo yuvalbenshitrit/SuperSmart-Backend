@@ -1,91 +1,79 @@
-###
-# Add a new post
-POST http://localhost:3000/posts
+### Create a new store
+POST http://localhost:3000/stores
 Content-Type: application/json
 
 {
-  "title": "My secound Post",
-  "content": "This is the content of the first post.",
-  "sender": "noa",
-  "createdAt": "2021-08-01T12:00:00.000Z",
-  "likes": 0,
-  "photos": ["https://images.ctfassets.net/wv75stsetqy3/DaKdXY2tkQGWeVQiCbSx7/ac01166282697e4e0cafb99180d35cd1/Thailand_Featured.jpg?q=60&fit=fill&fm=webp"]
-  
+  "storeId": "store1233",
+  "name": "My Storee"
 }
-###
 
-GET http://localhost:3000/posts
+### Get all stores
+GET http://localhost:3000/stores
 
-###
+### Get store by ID
+GET http://localhost:3000/stores/store1233
 
-# Get a post by ID
-GET http://localhost:3000/posts/678a0f672df28e47056b70d6
-Content-Type: application/json
-
-
-###
-
-GET http://localhost:3000/posts?sender=yuval
-Content-Type: application/json
-
-###
-
-# Update a post by ID
-PUT http://localhost:3000/posts/678a0f672df28e47056b70d6
+### Update store by ID
+PUT http://localhost:3000/stores/store1233
 Content-Type: application/json
 
 {
-  "title": "Updated Post Title",
-  "content": "Updated content for the post."
-}
-
-###
-
-POST http://localhost:3000/comments
-Content-Type: application/json
-
-{
-  "postId": "678a0f672df28e47056b70d6",
-  "content": "This is a test2 comment.",
-  "sender": "Yuvallllllllllllllllll ",
-  "createdAt": "2021-08-01T12:00:00.000Z"
+  "name": "Updated Store Name"
 
 }
-###
-# Get all comments
-GET http://localhost:3000/comments
 
-###
+### Delete store by ID
+DELETE http://localhost:3000/stores/store123
 
-# Get comments by post ID
-GET http://localhost:3000/comments/678a0f672df28e47056b70d6
-Content-Type: application/json
-###
-
-# Update a comment
-PUT http://localhost:3000/comments/678a12982da196f13dde3f3b
-Content-Type: application/json
-
-{
-  "content": "This is an updated comment.",
-  "sender": "UpdatedUser"
-}
-
-###
-# Delete a comment
-DELETE http://localhost:3000/comments/678a12982da196f13dde3f3b
-Content-Type: application/json
 
 
 ###
+# Register a new user
 POST http://localhost:3000/auth/register
 Content-Type: application/json
 
 {
-  
- "email": "user3@test.com",
-  "password": "123456",
+  "email": "user3@test.com",
+  "password": "123456789",
+  "userName": "user3",
   "accessToken": "12345",
   "profilePicture": "https://images.ctfassets.net/wv75stsetqy3/DaKdXY2tkQGWeVQiCbSx7/ac01166282697e4e0cafb99180d35cd1/Thailand_Featured.jpg?q=60&fit=fill&fm=webp"
 }
 
+
+###
+
+# Login a user
+POST http://localhost:3000/auth/login
+Content-Type: application/json
+
+{
+  "email": "user3@test.com",
+  "password": "123456789"
+}
+
+###
+
+# Refresh Token
+POST http://localhost:3000/auth/refresh
+Authorization: Bearer your_refresh_token
+
+###
+
+# Logout a user
+POST http://localhost:3000/auth/logout
+Authorization: Bearer your_refresh_token
+
+###
+
+# Update user
+PUT http://localhost:3000/auth/your_user_id
+Content-Type: application/json
+Authorization: Bearer your_access_token
+
+{
+  "email": "newemail@example.com",
+  "password": "newpassword"
+}
+
+  

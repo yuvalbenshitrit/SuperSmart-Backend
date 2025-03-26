@@ -1,58 +1,46 @@
 import mongoose, { Schema, Document } from "mongoose";
 
+export interface IPrice {
+  date: Date;
+  price: number;
+}
+
 export interface IStorePrice {
   storeId: mongoose.Types.ObjectId;
-  price: number;
+  prices: IPrice[];
 }
 
 export interface IItem extends Document {
   name: string;
   category: string;
   storePrices: IStorePrice[];
+  image?: string; 
+  code?: string;  
+  barcode?: string; 
 }
+
+const priceSchema = new Schema<IPrice>({
+  date: { type: Date, required: true },
+  price: { type: Number, required: true },
+});
 
 const storePriceSchema = new Schema<IStorePrice>({
   storeId: { type: Schema.Types.ObjectId, ref: "Store", required: true },
-  price: { type: Number, required: true },
+  prices: { type: [priceSchema], default: [] },
 });
 
 const itemSchema = new Schema<IItem>(
   {
     name: { type: String, required: true },
     category: { type: String, required: true },
-    storePrices: { type: [storePriceSchema], default: [] }
+    storePrices: { type: [storePriceSchema], default: [] },
+    image: { type: String }, 
+    code: { type: String },  
+    barcode: { type: String }, 
   },
   { timestamps: true }
 );
 
-// Add this code to properly initialize your model
-const initializeItemModel = async () => {
-  const itemModel = mongoose.model<IItem>("Item", itemSchema);
-  
-  try {
-    // Check if the index exists and drop it if it does
-    const collection = mongoose.connection.collection("items");
-    const indexes = await collection.indexes();
-    const hasIdIndex = indexes.some(index => index.name === "id_1");
-    
-    if (hasIdIndex) {
-      await collection.dropIndex("id_1");
-      console.log("Dropped legacy 'id_1' index");
-    }
-  } catch (error) {
-    console.error("Error handling item model indexes:", error);
-  }
-  
-  return itemModel;
-};
-
-// Use a temporary model for export that will be replaced once connected
-let itemModel = mongoose.models.Item as mongoose.Model<IItem> || 
-                mongoose.model<IItem>("Item", itemSchema);
-
-// Update index handling when mongoose is connected
-mongoose.connection.once("connected", async () => {
-  itemModel = await initializeItemModel();
-});
+const itemModel = mongoose.model<IItem>("Item", itemSchema);
 
 export default itemModel;

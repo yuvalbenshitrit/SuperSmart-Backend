@@ -9,11 +9,16 @@ const createItem = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Missing required fields: name and category" });
     }
 
-    // Validate storeId in storePrices if provided
+    // Validate storeId and prices in storePrices if provided
     if (req.body.storePrices && Array.isArray(req.body.storePrices)) {
       for (const storePrice of req.body.storePrices) {
         if (!mongoose.isValidObjectId(storePrice.storeId)) {
-          return res.status(400).json({ message: "Invalid storeId in storePrices" });
+          return res.status(400).json({ message: `Invalid storeId: ${storePrice.storeId}` });
+        }
+        for (const price of storePrice.prices) {
+          if (!price.date || !price.price) {
+            return res.status(400).json({ message: "Each price must have a date and a price" });
+          }
         }
       }
     }
@@ -21,9 +26,8 @@ const createItem = async (req: Request, res: Response) => {
     // Create the item without manually adding an 'id' field
     const newItem = new itemModel({
       ...req.body,
-      // Remove the manual 'id' field as MongoDB will create _id automatically
     });
-    
+
     const savedItem = await newItem.save();
     res.status(201).json(savedItem);
   } catch (error) {
@@ -64,6 +68,20 @@ const updateItem = async (req: Request, res: Response) => {
     // Validate itemId
     if (!mongoose.isValidObjectId(itemId)) {
       return res.status(400).json({ message: "Invalid item ID" });
+    }
+
+    // Validate storeId and prices in storePrices if provided
+    if (req.body.storePrices && Array.isArray(req.body.storePrices)) {
+      for (const storePrice of req.body.storePrices) {
+        if (!mongoose.isValidObjectId(storePrice.storeId)) {
+          return res.status(400).json({ message: `Invalid storeId: ${storePrice.storeId}` });
+        }
+        for (const price of storePrice.prices) {
+          if (!price.date || !price.price) {
+            return res.status(400).json({ message: "Each price must have a date and a price" });
+          }
+        }
+      }
     }
 
     // Check if the item exists

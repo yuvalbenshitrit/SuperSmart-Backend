@@ -1,72 +1,61 @@
-
 import { Request, Response, NextFunction } from "express";
 import userModel, { iUser } from "../models/user";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
+import jwt, { SignOptions } from "jsonwebtoken";
 import { Document } from "mongoose";
 import { isEmail } from "validator";
-import { OAuth2Client } from 'google-auth-library';
-import mongoose from "mongoose";
-
+import { OAuth2Client } from "google-auth-library";
 
 const client = new OAuth2Client();
 const googleSignIn = async (req: Request, res: Response) => {
   console.log(req.body);
   try {
-      const ticket = await client.verifyIdToken({
-          idToken: req.body.credential,
-          audience: process.env.GOOGLE_CLIENT_ID,
+    const ticket = await client.verifyIdToken({
+      idToken: req.body.credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const email = payload?.email;
+    if (email != null) {
+      let user = await userModel.findOne({ email: email });
+      if (user == null) {
+        user = await userModel.create({
+          userName: payload?.name || email.split("@")[0],
+          email: email,
+          password: "0",
+          profilePicture: payload?.picture,
+        });
+      }
+      const tokens = await generateTokens(user);
+      res.status(200).send({
+        userName: user.userName,
+        email: user.email,
+        _id: user._id,
+        profilePicture: user.profilePicture,
+        ...tokens,
       });
-      const payload = ticket.getPayload();
-      const email = payload?.email;
-      if (email != null) {
-          let user = await userModel.findOne({ 'email': email });
-          if (user == null) {
-              user = await userModel.create(
-                  {
-                      'userName': payload?.name || email.split('@')[0],  
-                      'email': email,
-                      'password': '0',
-                      'profilePicture': payload?.picture
-                  });
-          }
-          const tokens = await generateTokens(user)
-          res.status(200).send(
-              {
-                userName: user.userName,
-                  email: user.email,
-                  _id: user._id,
-                  profilePicture: user.profilePicture,
-                  ...tokens
-              })
-      }
+    }
   } catch (err) {
-      if (err instanceof Error) {
-        return res.status(400).send(err.message);
-      } else {
-        return res.status(400).send("An error occurred");
-      }
+    if (err instanceof Error) {
+      return res.status(400).send(err.message);
+    } else {
+      return res.status(400).send("An error occurred");
+    }
   }
-
-}
-
-
-
+};
 
 const register = async (req: Request, res: Response) => {
-  const {email, password, userName } = req.body;
+  const { email, password, userName } = req.body;
   // Validate userName
-  if (!userName || userName.trim() === '') {
+  if (!userName || userName.trim() === "") {
     return res.status(400).send({ error: "Invalid input data" });
   }
 
-  
   if (!isEmail(email)) {
     return res.status(400).send({ error: "Invalid email format" });
   }
 
-  
-  if (!password || password.trim() === '') {
+  if (!password || password.trim() === "") {
     return res.status(400).send({ error: "Invalid input data" });
   }
 
@@ -80,7 +69,7 @@ const register = async (req: Request, res: Response) => {
     if (existingUserName) {
       return res.status(400).send({ error: "Username is already in use" });
     }
-  
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
     let profilePicture = req.body.profilePicture;
@@ -90,11 +79,10 @@ const register = async (req: Request, res: Response) => {
       email,
       password: hashedPassword,
       profilePicture: profilePicture,
-      
     });
-  
+
     res.status(200).send(user);
-  } catch(error) {
+  } catch (error) {
     console.error("Error during user registration:", error);
     res.status(400).send({ error: "An error occurred" });
   }
@@ -113,7 +101,7 @@ const generateTokens = (
       rand: rand,
     },
     process.env.TOKEN_SECRET,
-    { expiresIn: process.env.TOKEN_EXPIRATION || "10s" }
+    { expiresIn: process.env.TOKEN_EXPIRATION || "10s" } as SignOptions
   );
   const refreshToken = jwt.sign(
     {
@@ -121,7 +109,7 @@ const generateTokens = (
       rand: rand,
     },
     process.env.TOKEN_SECRET,
-    { expiresIn: process.env.REFRESH_TOKEN_EXPIRATION || "7d" }
+    { expiresIn: process.env.REFRESH_TOKEN_EXPIRATION || "7d" } as SignOptions
   );
   return { refreshToken: refreshToken, accessToken: accessToken };
 };
@@ -132,7 +120,7 @@ const login = async (req: Request, res: Response) => {
   try {
     const user = await userModel.findOne({ email: email });
     if (!user) {
-      res.status(404).send({ error: "User not found" }); 
+      res.status(404).send({ error: "User not found" });
       return;
     }
     const validPassword = await bcrypt.compare(password, user.password);
@@ -142,7 +130,7 @@ const login = async (req: Request, res: Response) => {
     }
     const tokens = generateTokens(user);
     if (!tokens) {
-      res.status(400).send({ error: "Token generation error" }); 
+      res.status(400).send({ error: "Token generation error" });
       return;
     }
 
@@ -230,25 +218,23 @@ const updateUser = async (req: UpdateUserRequest, res: Response) => {
     const userId = req.params.id;
     const updateData = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return res.status(400).json({ message: "Invalid user ID" });
-    }
+    console.log("Updating user:", userId, updateData);
 
     const user = await userModel.findById(userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const updatedUser = await userModel.findByIdAndUpdate(userId, updateData, { new: true });
+    const updatedUser = await userModel.findByIdAndUpdate(userId, updateData, {
+      new: true,
+    });
+
     return res.status(200).json(updatedUser);
   } catch (error) {
     console.error("Error updating user:", error);
-    return res.status(400).json({ message: "Bad request", error });
+    return res.status(500).json({ message: "Internal server error", error });
   }
 };
-
-
-  
 
 const logout = async (req: Request, res: Response) => {
   try {
@@ -268,7 +254,6 @@ const logout = async (req: Request, res: Response) => {
     return;
   }
 };
-
 
 const refresh = async (req: Request, res: Response) => {
   try {
@@ -294,6 +279,68 @@ const refresh = async (req: Request, res: Response) => {
   }
 };
 
+const updateCart = async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.id;
+    const { productId, quantity } = req.body;
+
+    if (!productId || quantity === undefined) {
+      return res.status(400).send({ error: "Invalid input data" });
+    }
+
+    const user = await userModel.findById(userId);
+    if (!user) {
+      return res.status(404).send({ error: "User not found" });
+    }
+
+    const cartItemIndex = user.cart?.findIndex(
+      (item) => item.productId === productId
+    );
+
+    if (cartItemIndex !== undefined && cartItemIndex >= 0) {
+      // Update quantity if item exists in the cart
+      if (quantity > 0) {
+        user.cart![cartItemIndex].quantity = quantity;
+      } else {
+        // Remove item if quantity is 0
+        user.cart!.splice(cartItemIndex, 1);
+      }
+    } else if (quantity > 0) {
+      // Add new item to the cart
+      user.cart!.push({ productId, quantity });
+    }
+
+    await user.save();
+    res.status(200).send(user.cart);
+  } catch (error) {
+    console.error("Error updating cart:", error);
+    res.status(500).send({ error: "Internal server error" });
+  }
+};
+
+const deleteCartItem = async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.id;
+    const { productId } = req.body;
+
+    if (!productId) {
+      return res.status(400).send({ error: "Product ID is required" });
+    }
+
+    const user = await userModel.findById(userId);
+    if (!user) {
+      return res.status(404).send({ error: "User not found" });
+    }
+
+    user.cart = user.cart?.filter((item) => item.productId !== productId) || [];
+    await user.save();
+
+    res.status(200).send(user.cart);
+  } catch (error) {
+    console.error("Error deleting cart item:", error);
+    res.status(500).send({ error: "Internal server error" });
+  }
+};
 
 type Payload = {
   _id: string;
@@ -305,18 +352,17 @@ export const authMiddleware = (
 ) => {
   const tokenHeader = req.headers["authorization"];
   const token = tokenHeader && tokenHeader.split(" ")[1];
-
   if (!token) {
-    return res.status(400).send("Access denied: Token is missing");
+    res.status(400).send("Access denied");
+    return;
   }
-
   if (process.env.TOKEN_SECRET === undefined) {
-    return res.status(500).send("Server error: TOKEN_SECRET is not defined");
+    res.status(400).send("server error");
+    return;
   }
-
   jwt.verify(token, process.env.TOKEN_SECRET, (err, payload) => {
     if (err) {
-      return res.status(404).send("Access denied: Invalid token");
+      res.status(400).send("Access denied");
     } else {
       const userId = (payload as Payload)._id;
       req.params.userId = userId;
@@ -325,10 +371,6 @@ export const authMiddleware = (
   });
 };
 
-
-
-
-
 export default {
   googleSignIn,
   register,
@@ -336,5 +378,6 @@ export default {
   refresh,
   logout,
   updateUser,
-  
+  updateCart,
+  deleteCartItem,
 };

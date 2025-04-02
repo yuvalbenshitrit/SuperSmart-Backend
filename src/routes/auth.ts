@@ -40,11 +40,12 @@ import authController from "../controllers/auth";
  *         password: '123456'
  */
 
-router.post("/register", (req,res)=>{authController.register(req,res)});
-router.post("/google", (req,res)=>{authController.googleSignIn(req,res)});
-
-
-
+router.post("/register", (req, res) => {
+  authController.register(req, res);
+});
+router.post("/google", (req, res) => {
+  authController.googleSignIn(req, res);
+});
 
 /**
  * @swagger
@@ -198,9 +199,59 @@ router.post("/logout", authController.logout);
  *         description: Internal server error
  */
 router.put("/:id", (req, res) => {
-    authController.updateUser(req, res);
-  });
-  
+  authController.updateUser(req, res);
+});
 
+/**
+ * @swagger
+ * /auth/{id}/cart:
+ *   delete:
+ *     summary: Deletes an item from the user's cart
+ *     tags: [Auth]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: The user ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               productId:
+ *                 type: string
+ *                 description: The ID of the product to delete
+ *             required:
+ *               - productId
+ *             example:
+ *               productId: "12345"
+ *     responses:
+ *       200:
+ *         description: The updated cart
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   productId:
+ *                     type: string
+ *                   quantity:
+ *                     type: number
+ *       400:
+ *         description: Bad request
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
+router.delete("/:id/cart", (req, res) => {
+  authController.deleteCartItem(req, res);
+});
 
 export default router;

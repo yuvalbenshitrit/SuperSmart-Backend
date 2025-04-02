@@ -6,16 +6,16 @@ export interface iUser {
   password: string;
   _id?: string;
   refreshTokens?: string[];
-  profilePicture?: string;  
+  profilePicture?: string;
   googleId?: string;
-  
+  cart?: { productId: string; quantity: number }[];
 }
 
 const userSchema = new mongoose.Schema<iUser>({
-  userName: { 
+  userName: {
     type: String,
     required: true,
-    unique: true 
+    unique: true,
   },
   email: {
     type: String,
@@ -31,11 +31,20 @@ const userSchema = new mongoose.Schema<iUser>({
     default: [],
   },
   profilePicture: {
-    type: String,  
+    type: String,
   },
   googleId: {
     type: String,
     required: false,
+  },
+  cart: {
+    type: [
+      {
+        productId: { type: String, required: true },
+        quantity: { type: Number, required: true },
+      },
+    ],
+    default: [],
   },
 });
 

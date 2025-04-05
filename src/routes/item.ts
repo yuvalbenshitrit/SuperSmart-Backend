@@ -1,6 +1,9 @@
 import { Router } from "express";
 import itemController from "../controllers/item";
+import multer from 'multer';
+
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 /**
  * @swagger
@@ -114,6 +117,33 @@ router.put("/:id", (req, res) => {
  */
 router.delete("/:id", (req, res) => {
     itemController.deleteItem(req, res);
+});
+/**
+ * @swagger
+ * /items/analyze-receipt:
+ * post:
+ * summary: Analyze a receipt image to extract product information using Gemini AI
+ * tags: [Items]
+ * requestBody:
+ * required: true
+ * content:
+ * multipart/form-data:
+ * schema:
+ * type: object
+ * properties:
+ * receiptImage:
+ * type: string
+ * format: binary
+ * responses:
+ * 200:
+ * description: Successfully extracted product information.
+ * 400:
+ * description: Invalid request or missing image.
+ * 500:
+ * description: Error analyzing receipt.
+ */
+router.post("/analyze-receipt", upload.single("receiptImage"), (req, res) => {
+    itemController.analyzeReceipt(req, res);
 });
 
 export default router;

@@ -1,6 +1,11 @@
 import { Request, Response } from "express";
 import itemModel from "../models/item";
 import mongoose from "mongoose";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "AIzaSyCXx5QQ3MwNCcvjGKKO5xr1uOFbMUPExD4");
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); //vision model for images
+
 
 const createItem = async (req: Request, res: Response) => {
   try {
@@ -114,5 +119,36 @@ const deleteItem = async (req: Request, res: Response) => {
     res.status(500).json({ message: (error as Error).message });
   }
 };
+const analyzeReceipt = async (req: Request, res: Response) => {
+  try {
+      if (!req.file) {
+          return res.status(400).json({ message: "Please upload a receipt image." });
+      }
 
-export default { createItem, getItems, getItemById, updateItem, deleteItem };
+      const imagePart = {
+          inlineData: {
+              mimeType: req.file.mimetype,
+              data: Buffer.from(req.file.buffer).toString('base64'), // Convert buffer to base64 string
+          },
+      };
+
+      const promptPart = {
+          text: `Analyze the products listed in this receipt and return them as a clear, comma-separated list. If there are quantities, include them (e.g., "Milk x2, Bread, Apples x3").`,
+      };
+
+      const result = await model.generateContent([promptPart, imagePart]);
+      const response = result.response;
+      const aiContent = response.text();
+
+      if (aiContent) {
+          return res.status(200).json({ products: aiContent.trim() });
+      } else {
+          return res.status(500).json({ message: "Could not extract product information from the receipt." });
+      }
+  } catch (error) {
+      console.error("Error analyzing receipt:", error);
+      return res.status(500).json({ message: "Error analyzing receipt." });
+  }
+};
+
+export default { createItem, getItems, getItemById, updateItem, deleteItem,analyzeReceipt };

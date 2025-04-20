@@ -11,6 +11,7 @@ import swaggerUI from "swagger-ui-express";
 import swaggerJsDoc from "swagger-jsdoc";
 import cors from "cors";
 import file_routes from "./routes/file_routes";
+import cartRoutes from "./routes/cart";
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -19,6 +20,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use("/items", itemsRoutes);
 app.use("/stores", storesRoutes);
 app.use("/auth", authRoutes);
+app.use("/cart", cartRoutes); 
 app.use("/public", express.static("public"));
 app.use("/storage", express.static("storage"));
 app.use("/file", file_routes);

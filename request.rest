@@ -157,9 +157,9 @@ POST http://localhost:3000/auth/register
 Content-Type: application/json
 
 {
-  "email": "user3@test.com",
+  "email": "user16@test.com",
   "password": "123456789",
-  "userName": "user3",
+  "userName": "user16",
   "accessToken": "12345",
   "profilePicture": "https://images.ctfassets.net/wv75stsetqy3/DaKdXY2tkQGWeVQiCbSx7/ac01166282697e4e0cafb99180d35cd1/Thailand_Featured.jpg?q=60&fit=fill&fm=webp"
 }
@@ -201,3 +201,37 @@ Authorization: Bearer your_access_token
 }
 
   
+### יצירת עגלה חדשה
+POST http://localhost:3000/cart
+Content-Type: application/json
+
+{
+  "name": "עגלה לחגים",
+  "ownerId": "user16",
+  "participants": ["user456", "user789"],
+  "items": [
+    { "productId": "milk123", "quantity": 2 },
+    { "productId": "bread456", "quantity": 1 }
+  ]
+}
+
+### שליפת כל העגלות של משתמש (כבעלים או משתתף)
+GET http://localhost:3000/cart?userId=user16
+
+### שליפת עגלה לפי מזהה
+GET http://localhost:3000/cart/6804a224096351b9e364fa7e
+
+### עדכון עגלה קיימת
+PUT http://localhost:3000/cart/6804a224096351b9e364fa7e
+Content-Type: application/json
+
+{
+  "name": "עגלה מעודכנת",
+  "items": [
+    { "productId": "milk123", "quantity": 3 },
+    { "productId": "eggs789", "quantity": 2 }
+  ]
+}
+
+### מחיקת עגלה
+DELETE http://localhost:3000/cart/6804a224096351b9e364fa7e

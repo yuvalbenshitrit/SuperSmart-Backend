@@ -6,7 +6,17 @@ import { Document } from "mongoose";
 import { isEmail } from "validator";
 import { OAuth2Client } from "google-auth-library";
 
+// טיפוס מותאם אישית שמכיל userId מה-JWT
+export interface AuthenticatedRequest extends Request {
+  userId?: string;
+}
+
+type Payload = {
+  _id: string;
+};
+
 const client = new OAuth2Client();
+
 const googleSignIn = async (req: Request, res: Response) => {
   console.log(req.body);
   try {
@@ -46,7 +56,6 @@ const googleSignIn = async (req: Request, res: Response) => {
 
 const register = async (req: Request, res: Response) => {
   const { email, password, userName } = req.body;
-  // Validate userName
   if (!userName || userName.trim() === "") {
     return res.status(400).send({ error: "Invalid input data" });
   }
@@ -158,67 +167,48 @@ const login = async (req: Request, res: Response) => {
 const validateRefreshToken = (refreshToken: string | undefined) => {
   return new Promise<Document<unknown, object, iUser> & iUser>(
     (resolve, reject) => {
-      if (refreshToken == null) {
+      if (!refreshToken || !process.env.TOKEN_SECRET) {
         reject("error");
         return;
       }
-      if (!process.env.TOKEN_SECRET) {
-        reject("error");
-        return;
-      }
-      jwt.verify(
-        refreshToken,
-        process.env.TOKEN_SECRET,
-        async (err, payload) => {
-          if (err) {
+
+      jwt.verify(refreshToken, process.env.TOKEN_SECRET, async (err, payload) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        const userId = (payload as Payload)._id;
+        try {
+          const user = await userModel.findById(userId);
+          if (!user) {
+            reject("error");
+            return;
+          }
+
+          if (
+            !user.refreshTokens ||
+            !user.refreshTokens.includes(refreshToken)
+          ) {
+            user.refreshTokens = [];
+            await user.save();
             reject(err);
             return;
           }
-          const userId = (payload as Payload)._id;
-          try {
-            const user = await userModel.findById(userId);
-            if (!user) {
-              reject("error");
-              return;
-            }
-            //check if token exists
-            if (
-              !user.refreshTokens ||
-              !user.refreshTokens.includes(refreshToken)
-            ) {
-              user.refreshTokens = [];
-              await user.save();
-              reject(err);
-              return;
-            }
-            resolve(user);
-          } catch (err) {
-            reject(err);
-          }
+
+          resolve(user);
+        } catch (err) {
+          reject(err);
         }
-      );
+      });
     }
   );
 };
 
-interface UpdateUserRequest extends Request {
-  params: {
-    id: string;
-  };
-  body: {
-    userName?: string;
-    email?: string;
-    password?: string;
-    profilePicture?: string;
-  };
-}
-
-const updateUser = async (req: UpdateUserRequest, res: Response) => {
+const updateUser = async (req: Request, res: Response) => {
   try {
     const userId = req.params.id;
     const updateData = req.body;
-
-    console.log("Updating user:", userId, updateData);
 
     const user = await userModel.findById(userId);
     if (!user) {
@@ -236,6 +226,45 @@ const updateUser = async (req: UpdateUserRequest, res: Response) => {
   }
 };
 
+const changePassword = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { id, currentPassword, newPassword } = req.body; // ✅ קבלת id מתוך body
+  const userIdFromToken = req.userId;
+
+  if (id !== userIdFromToken) {
+    res.status(403).send({ error: "Unauthorized" });
+    return;
+  }
+
+  if (!currentPassword || !newPassword) {
+    res.status(400).send({ error: "Missing required fields" });
+    return;
+  }
+
+  try {
+    const user = await userModel.findById(id); // ✅ שימוש ב-id מה-body
+    if (!user) {
+      res.status(404).send({ error: "User not found" });
+      return;
+    }
+
+    const validPassword = await bcrypt.compare(currentPassword, user.password);
+    if (!validPassword) {
+      res.status(403).send({ error: "Current password is incorrect" });
+      return;
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedNewPassword;
+    await user.save();
+
+    res.status(200).send({ message: "Password updated successfully" });
+  } catch (err) {
+    console.error("Error changing password:", err);
+    res.status(500).send({ error: "Internal server error" });
+  }
+};
+
+
 const logout = async (req: Request, res: Response) => {
   try {
     const user = await validateRefreshToken(req.body.refreshToken);
@@ -243,7 +272,7 @@ const logout = async (req: Request, res: Response) => {
       res.status(400).send("error");
       return;
     }
-    //remove the token from the user
+
     user.refreshTokens = user.refreshTokens!.filter(
       (token) => token !== req.body.refreshToken
     );
@@ -260,7 +289,6 @@ const refresh = async (req: Request, res: Response) => {
     const user = await validateRefreshToken(req.body.refreshToken);
 
     const tokens = generateTokens(user);
-    console.log(tokens);
     if (!tokens) {
       res.status(400).send("error");
       return;
@@ -298,15 +326,12 @@ const updateCart = async (req: Request, res: Response) => {
     );
 
     if (cartItemIndex !== undefined && cartItemIndex >= 0) {
-      // Update quantity if item exists in the cart
       if (quantity > 0) {
         user.cart![cartItemIndex].quantity = quantity;
       } else {
-        // Remove item if quantity is 0
         user.cart!.splice(cartItemIndex, 1);
       }
     } else if (quantity > 0) {
-      // Add new item to the cart
       user.cart!.push({ productId, quantity });
     }
 
@@ -342,30 +367,23 @@ const deleteCartItem = async (req: Request, res: Response) => {
   }
 };
 
-type Payload = {
-  _id: string;
-};
 export const authMiddleware = (
-  req: Request,
+  req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ) => {
   const tokenHeader = req.headers["authorization"];
   const token = tokenHeader && tokenHeader.split(" ")[1];
-  if (!token) {
+  if (!token || !process.env.TOKEN_SECRET) {
     res.status(400).send("Access denied");
     return;
   }
-  if (process.env.TOKEN_SECRET === undefined) {
-    res.status(400).send("server error");
-    return;
-  }
+
   jwt.verify(token, process.env.TOKEN_SECRET, (err, payload) => {
     if (err) {
       res.status(400).send("Access denied");
     } else {
-      const userId = (payload as Payload)._id;
-      req.params.userId = userId;
+      req.userId = (payload as Payload)._id;
       next();
     }
   });
@@ -380,4 +398,5 @@ export default {
   updateUser,
   updateCart,
   deleteCartItem,
+  changePassword,
 };

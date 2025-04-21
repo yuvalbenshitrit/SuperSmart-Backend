@@ -133,7 +133,7 @@ const analyzeReceipt = async (req: Request, res: Response) => {
       };
 
       const promptPart = {
-          text: `Analyze the products listed in this receipt and return their barcodes as a clear, comma-separated list. If a product doesn't have a clear barcode, or if multiple barcodes are associated with one product line, just list the detected barcodes.`,
+          text: `Analyze the products listed in this receipt. For each distinct product line, identify any sequence of digits that looks like a barcode. Return all *unique* sequences of 8 to 14 digits found on the receipt as a clear, comma-separated list. Exclude any numbers that are clearly prices or quantities if possible, but prioritize returning any digit sequence that could be a barcode.`,
       };
 
       const result = await model.generateContent([promptPart, imagePart]);
@@ -141,7 +141,12 @@ const analyzeReceipt = async (req: Request, res: Response) => {
       const aiContent = response.text();
 
       if (aiContent) {
-          const extractedBarcodes = aiContent.split(',').map(barcode => barcode.trim()).filter(barcode => barcode);
+          // More aggressive barcode extraction using regex
+          const barcodeRegex = /\b\d{8,14}\b/g;
+          const potentialBarcodes = aiContent.match(barcodeRegex) || [];
+          const extractedBarcodes = [...new Set(potentialBarcodes.map(barcode => barcode.trim()).filter(barcode => barcode))];
+
+          console.log("Potential Barcodes Extracted:", extractedBarcodes); // Debugging
 
           // Fetch items from the database based on the extracted barcodes
           const itemsToAdd = await itemModel.find({ barcode: { $in: extractedBarcodes } });

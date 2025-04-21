@@ -1,6 +1,6 @@
 import express from "express";
 const router = express.Router();
-import authController from "../controllers/auth";
+import authController, { authMiddleware } from "../controllers/auth";
 
 /**
  * @swagger
@@ -39,7 +39,7 @@ import authController from "../controllers/auth";
  *         email: 'bob@gmail.com'
  *         password: '123456'
  */
-
+router.put("/change-password", authMiddleware, authController.changePassword); // ✅ נכון
 router.post("/register", (req, res) => {
   authController.register(req, res);
 });
@@ -253,5 +253,7 @@ router.put("/:id", (req, res) => {
 router.delete("/:id/cart", (req, res) => {
   authController.deleteCartItem(req, res);
 });
+
+
 
 export default router;

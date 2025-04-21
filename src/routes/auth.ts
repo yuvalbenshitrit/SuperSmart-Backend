@@ -163,7 +163,10 @@ router.post("/refresh", authController.refresh);
  *         description: Internal server error
  */
 
-router.post("/logout", authController.logout);
+router.post("/logout", (req, res) => {
+  authController.logout(req, res);
+});
+
 
 /**
  * @swagger

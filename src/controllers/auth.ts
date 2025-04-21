@@ -3,7 +3,6 @@ import userModel, { iUser } from "../models/user";
 import bcrypt from "bcrypt";
 import jwt, { SignOptions } from "jsonwebtoken";
 import { Document } from "mongoose";
-import { isEmail } from "validator";
 import { OAuth2Client } from "google-auth-library";
 
 // טיפוס מותאם אישית שמכיל userId מה-JWT
@@ -18,82 +17,98 @@ type Payload = {
 const client = new OAuth2Client();
 
 const googleSignIn = async (req: Request, res: Response) => {
-  console.log(req.body);
   try {
     const ticket = await client.verifyIdToken({
       idToken: req.body.credential,
       audience: process.env.GOOGLE_CLIENT_ID,
     });
+
     const payload = ticket.getPayload();
     const email = payload?.email;
-    if (email != null) {
-      let user = await userModel.findOne({ email: email });
-      if (user == null) {
-        user = await userModel.create({
-          userName: payload?.name || email.split("@")[0],
-          email: email,
-          password: "0",
-          profilePicture: payload?.picture,
-        });
-      }
-      const tokens = await generateTokens(user);
-      res.status(200).send({
-        userName: user.userName,
-        email: user.email,
-        _id: user._id,
-        profilePicture: user.profilePicture,
-        ...tokens,
+
+    if (!email) {
+      return res.status(400).send("Email not provided in Google credentials");
+    }
+
+    let user = await userModel.findOne({ email });
+
+    if (!user) {
+      user = await userModel.create({
+        userName: payload?.name || email.split("@")[0],
+        email: email,
+        password: "0",
+        profilePicture: payload?.picture,
+        refreshTokens: [], // ✅ לוודא שהשדה קיים ביוזר חדש
       });
     }
-  } catch (err) {
-    if (err instanceof Error) {
-      return res.status(400).send(err.message);
-    } else {
-      return res.status(400).send("An error occurred");
+
+    const tokens = generateTokens(user);
+    if (!tokens) {
+      return res.status(500).send("Token generation failed");
     }
+
+    // ✅ הוספת refreshToken למערך
+    user.refreshTokens = [tokens.refreshToken]; // או user.refreshTokens.push(...) לשמירה מרובה
+    await user.save();
+
+    res.status(200).send({
+      _id: user._id,
+      userName: user.userName,
+      email: user.email,
+      profilePicture: user.profilePicture,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken, // ✅ שליחה ללקוח
+    });
+
+  } catch (err) {
+    console.error("Google sign in error:", err);
+    return res.status(400).send(
+      err instanceof Error ? err.message : "An error occurred"
+    );
   }
 };
 
-const register = async (req: Request, res: Response) => {
-  const { email, password, userName } = req.body;
-  if (!userName || userName.trim() === "") {
-    return res.status(400).send({ error: "Invalid input data" });
-  }
-
-  if (!isEmail(email)) {
-    return res.status(400).send({ error: "Invalid email format" });
-  }
-
-  if (!password || password.trim() === "") {
-    return res.status(400).send({ error: "Invalid input data" });
-  }
-
+const register = async (req: Request, res: Response): Promise<Response> => {
   try {
+    const { userName, email, password, profilePicture } = req.body;
+
+    if (!userName || !email || !password) {
+      return res.status(400).send({ error: "Missing required fields" });
+    }
+
     const existingUser = await userModel.findOne({ email });
     if (existingUser) {
       return res.status(400).send({ error: "Email is already in use" });
     }
 
-    const existingUserName = await userModel.findOne({ userName });
-    if (existingUserName) {
-      return res.status(400).send({ error: "Username is already in use" });
-    }
-
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-    let profilePicture = req.body.profilePicture;
-    if (!profilePicture) profilePicture = null;
+    const hashedPassword = await bcrypt.hash(password, 10);
     const user = await userModel.create({
       userName,
       email,
       password: hashedPassword,
-      profilePicture: profilePicture,
+      profilePicture: profilePicture || null,
+      refreshTokens: [],
     });
 
-    res.status(200).send(user);
+    const tokens = generateTokens(user);
+    if (!tokens) {
+      return res.status(500).send({ error: "Token generation failed" });
+    }
+
+    user.refreshTokens = [tokens.refreshToken];
+    await user.save();
+
+    return res.status(201).send({
+      _id: user._id,
+      userName: user.userName,
+      email: user.email,
+      profilePicture: user.profilePicture,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    });
   } catch (error) {
-    console.error("Error during user registration:", error);
-    res.status(400).send({ error: "An error occurred" });
+    console.error("Registration error:", error);
+    return res.status(500).send({ error: "Internal server error" });
   }
 };
 
@@ -269,20 +284,20 @@ const logout = async (req: Request, res: Response) => {
   try {
     const user = await validateRefreshToken(req.body.refreshToken);
     if (!user) {
-      res.status(400).send("error");
-      return;
+      return res.status(400).send("Invalid refresh token");
     }
 
-    user.refreshTokens = user.refreshTokens!.filter(
-      (token) => token !== req.body.refreshToken
-    );
+    // 🧹 מוחק את כל ה־tokens של המשתמש
+    user.refreshTokens = [];
     await user.save();
-    res.status(200).send("logged out");
-  } catch {
-    res.status(400).send("error");
-    return;
+
+    res.status(200).send("Logged out from all sessions");
+  } catch (error) {
+    console.error("Logout error:", error);
+    res.status(400).send("Logout failed");
   }
 };
+
 
 const refresh = async (req: Request, res: Response) => {
   try {

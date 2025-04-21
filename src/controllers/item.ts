@@ -128,12 +128,12 @@ const analyzeReceipt = async (req: Request, res: Response) => {
       const imagePart = {
           inlineData: {
               mimeType: req.file.mimetype,
-              data: Buffer.from(req.file.buffer).toString('base64'), // Convert buffer to base64 string
+              data: Buffer.from(req.file.buffer).toString('base64'),
           },
       };
 
       const promptPart = {
-          text: `Analyze the products listed in this receipt and return them as a clear, comma-separated list. If there are quantities, include them (e.g., "Milk x2, Bread, Apples x3").`,
+          text: `Analyze the products listed in this receipt. For each distinct product line, identify any sequence of digits that looks like a barcode. Return all *unique* sequences of 8 to 14 digits found on the receipt as a clear, comma-separated list. Exclude any numbers that are clearly prices or quantities if possible, but prioritize returning any digit sequence that could be a barcode.`,
       };
 
       const result = await model.generateContent([promptPart, imagePart]);
@@ -141,9 +141,28 @@ const analyzeReceipt = async (req: Request, res: Response) => {
       const aiContent = response.text();
 
       if (aiContent) {
-          return res.status(200).json({ products: aiContent.trim() });
+          // More aggressive barcode extraction using regex
+          const barcodeRegex = /\b\d{8,14}\b/g;
+          const potentialBarcodes = aiContent.match(barcodeRegex) || [];
+          const extractedBarcodes = [...new Set(potentialBarcodes.map(barcode => barcode.trim()).filter(barcode => barcode))];
+
+          console.log("Potential Barcodes Extracted:", extractedBarcodes); // Debugging
+
+          // Fetch items from the database based on the extracted barcodes
+          const itemsToAdd = await itemModel.find({ barcode: { $in: extractedBarcodes } });
+
+          if (itemsToAdd.length > 0) {
+              const cartItems = itemsToAdd.map(item => ({
+                  _id: item._id,
+                  quantity: 1, // Default quantity
+                  // You might want to include other relevant item details here if needed
+              }));
+              return res.status(200).json({ cartItems });
+          } else {
+              return res.status(200).json({ message: "No products found with the extracted barcodes." });
+          }
       } else {
-          return res.status(500).json({ message: "Could not extract product information from the receipt." });
+          return res.status(500).json({ message: "Could not extract barcode information from the receipt." });
       }
   } catch (error) {
       console.error("Error analyzing receipt:", error);

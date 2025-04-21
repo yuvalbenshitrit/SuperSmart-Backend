@@ -128,12 +128,12 @@ const analyzeReceipt = async (req: Request, res: Response) => {
       const imagePart = {
           inlineData: {
               mimeType: req.file.mimetype,
-              data: Buffer.from(req.file.buffer).toString('base64'), // Convert buffer to base64 string
+              data: Buffer.from(req.file.buffer).toString('base64'),
           },
       };
 
       const promptPart = {
-          text: `Analyze the products listed in this receipt and return them as a clear, comma-separated list. If there are quantities, include them (e.g., "Milk x2, Bread, Apples x3").`,
+          text: `Analyze the products listed in this receipt and return their barcodes as a clear, comma-separated list. If a product doesn't have a clear barcode, or if multiple barcodes are associated with one product line, just list the detected barcodes.`,
       };
 
       const result = await model.generateContent([promptPart, imagePart]);
@@ -141,9 +141,23 @@ const analyzeReceipt = async (req: Request, res: Response) => {
       const aiContent = response.text();
 
       if (aiContent) {
-          return res.status(200).json({ products: aiContent.trim() });
+          const extractedBarcodes = aiContent.split(',').map(barcode => barcode.trim()).filter(barcode => barcode);
+
+          // Fetch items from the database based on the extracted barcodes
+          const itemsToAdd = await itemModel.find({ barcode: { $in: extractedBarcodes } });
+
+          if (itemsToAdd.length > 0) {
+              const cartItems = itemsToAdd.map(item => ({
+                  _id: item._id,
+                  quantity: 1, // Default quantity
+                  // You might want to include other relevant item details here if needed
+              }));
+              return res.status(200).json({ cartItems });
+          } else {
+              return res.status(200).json({ message: "No products found with the extracted barcodes." });
+          }
       } else {
-          return res.status(500).json({ message: "Could not extract product information from the receipt." });
+          return res.status(500).json({ message: "Could not extract barcode information from the receipt." });
       }
   } catch (error) {
       console.error("Error analyzing receipt:", error);

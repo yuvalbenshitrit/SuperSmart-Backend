@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose"; // Import mongoose
 import wishlistModel from "../models/wishlist";
+import { WishlistWithUser } from "../types"; // Import WishlistWithUser type
 
 export const createWishlist = async (req: Request, res: Response) => {
   try {
@@ -145,5 +147,19 @@ export const removeProductFromWishlist = async (
   } catch (error) {
     console.error("Error removing product from wishlist:", error);
     res.status(500).json({ error: "Failed to remove product from wishlist" });
+  }
+};
+
+export const findWishlistsWithProduct = async (
+  productId: string | mongoose.Types.ObjectId
+): Promise<WishlistWithUser[]> => {
+  try {
+    const wishlists = await wishlistModel.find({
+      products: productId.toString(),
+    });
+    return wishlists;
+  } catch (error) {
+    console.error("Error finding wishlists with product:", error);
+    return [];
   }
 };

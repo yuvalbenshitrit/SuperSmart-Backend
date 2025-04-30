@@ -1,6 +1,6 @@
 import { Router } from "express";
 import itemController from "../controllers/item";
-import multer from 'multer';
+import multer from "multer";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -27,8 +27,8 @@ const upload = multer({ storage: multer.memoryStorage() });
  *         description: Item created successfully
  */
 router.post("/", (req, res) => {
-    itemController.createItem(req, res);    
-} );
+  itemController.createItem(req, res);
+});
 
 /**
  * @swagger
@@ -61,7 +61,7 @@ router.get("/", itemController.getItems);
  *         description: Item not found
  */
 router.get("/:id", (req, res) => {
-    itemController.getItemById(req, res);
+  itemController.getItemById(req, res);
 });
 
 /**
@@ -94,7 +94,7 @@ router.get("/:id", (req, res) => {
  *         description: Item not found
  */
 router.put("/:id", (req, res) => {
-    itemController.updateItem(req, res);
+  itemController.updateItem(req, res);
 });
 
 /**
@@ -116,34 +116,65 @@ router.put("/:id", (req, res) => {
  *         description: Item not found
  */
 router.delete("/:id", (req, res) => {
-    itemController.deleteItem(req, res);
+  itemController.deleteItem(req, res);
 });
+
 /**
  * @swagger
  * /items/analyze-receipt:
- * post:
- * summary: Analyze a receipt image to extract product information using Gemini AI
- * tags: [Items]
- * requestBody:
- * required: true
- * content:
- * multipart/form-data:
- * schema:
- * type: object
- * properties:
- * receiptImage:
- * type: string
- * format: binary
- * responses:
- * 200:
- * description: Successfully extracted product information.
- * 400:
- * description: Invalid request or missing image.
- * 500:
- * description: Error analyzing receipt.
+ *   post:
+ *     summary: Analyze a receipt image to extract product information using Gemini AI
+ *     tags: [Items]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               receiptImage:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Successfully extracted product information.
+ *       400:
+ *         description: Invalid request or missing image.
+ *       500:
+ *         description: Error analyzing receipt.
  */
 router.post("/analyze-receipt", upload.single("receiptImage"), (req, res) => {
-    itemController.analyzeReceipt(req, res);
+  itemController.analyzeReceipt(req, res);
+});
+
+/**
+ * @swagger
+ * /items/price-changes:
+ *   get:
+ *     summary: Get price changes since a given timestamp or for specific products
+ *     tags: [Items]
+ *     parameters:
+ *       - in: query
+ *         name: lastCheckedTimestamp
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: ISO 8601 timestamp to filter price changes
+ *       - in: query
+ *         name: productIds
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of product IDs to filter price changes
+ *     responses:
+ *       200:
+ *         description: List of price changes
+ *       400:
+ *         description: Invalid query parameters
+ *       500:
+ *         description: Internal server error
+ */
+router.get("/price-changes", (req, res) => {
+  itemController.checkPriceChanges(req, res);
 });
 
 export default router;

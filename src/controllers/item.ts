@@ -2,27 +2,35 @@ import { Request, Response } from "express";
 import itemModel from "../models/item";
 import mongoose from "mongoose";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { PriceChange } from "../types"; // Import PriceChange type
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "AIzaSyCXx5QQ3MwNCcvjGKKO5xr1uOFbMUPExD4");
+const genAI = new GoogleGenerativeAI(
+  process.env.GEMINI_API_KEY || "AIzaSyCXx5QQ3MwNCcvjGKKO5xr1uOFbMUPExD4"
+);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); //vision model for images
-
 
 const createItem = async (req: Request, res: Response) => {
   try {
     // Validate request body
     if (!req.body.name || !req.body.category) {
-      return res.status(400).json({ message: "Missing required fields: name and category" });
+      return res
+        .status(400)
+        .json({ message: "Missing required fields: name and category" });
     }
 
     // Validate storeId and prices in storePrices if provided
     if (req.body.storePrices && Array.isArray(req.body.storePrices)) {
       for (const storePrice of req.body.storePrices) {
         if (!mongoose.isValidObjectId(storePrice.storeId)) {
-          return res.status(400).json({ message: `Invalid storeId: ${storePrice.storeId}` });
+          return res
+            .status(400)
+            .json({ message: `Invalid storeId: ${storePrice.storeId}` });
         }
         for (const price of storePrice.prices) {
           if (!price.date || !price.price) {
-            return res.status(400).json({ message: "Each price must have a date and a price" });
+            return res
+              .status(400)
+              .json({ message: "Each price must have a date and a price" });
           }
         }
       }
@@ -79,11 +87,15 @@ const updateItem = async (req: Request, res: Response) => {
     if (req.body.storePrices && Array.isArray(req.body.storePrices)) {
       for (const storePrice of req.body.storePrices) {
         if (!mongoose.isValidObjectId(storePrice.storeId)) {
-          return res.status(400).json({ message: `Invalid storeId: ${storePrice.storeId}` });
+          return res
+            .status(400)
+            .json({ message: `Invalid storeId: ${storePrice.storeId}` });
         }
         for (const price of storePrice.prices) {
           if (!price.date || !price.price) {
-            return res.status(400).json({ message: "Each price must have a date and a price" });
+            return res
+              .status(400)
+              .json({ message: "Each price must have a date and a price" });
           }
         }
       }
@@ -96,7 +108,9 @@ const updateItem = async (req: Request, res: Response) => {
     }
 
     // Update the item
-    const updatedItem = await itemModel.findByIdAndUpdate(itemId, req.body, { new: true });
+    const updatedItem = await itemModel.findByIdAndUpdate(itemId, req.body, {
+      new: true,
+    });
     res.status(200).json(updatedItem);
   } catch (error) {
     console.error("Error updating item:", error);
@@ -121,53 +135,144 @@ const deleteItem = async (req: Request, res: Response) => {
 };
 const analyzeReceipt = async (req: Request, res: Response) => {
   try {
-      if (!req.file) {
-          return res.status(400).json({ message: "Please upload a receipt image." });
-      }
+    if (!req.file) {
+      return res
+        .status(400)
+        .json({ message: "Please upload a receipt image." });
+    }
 
-      const imagePart = {
-          inlineData: {
-              mimeType: req.file.mimetype,
-              data: Buffer.from(req.file.buffer).toString('base64'),
-          },
-      };
+    const imagePart = {
+      inlineData: {
+        mimeType: req.file.mimetype,
+        data: Buffer.from(req.file.buffer).toString("base64"),
+      },
+    };
 
-      const promptPart = {
-          text: `Analyze the products listed in this receipt. For each distinct product line, identify any sequence of digits that looks like a barcode. Return all *unique* sequences of 8 to 14 digits found on the receipt as a clear, comma-separated list. Exclude any numbers that are clearly prices or quantities if possible, but prioritize returning any digit sequence that could be a barcode.`,
-      };
+    const promptPart = {
+      text: `Analyze the products listed in this receipt. For each distinct product line, identify any sequence of digits that looks like a barcode. Return all *unique* sequences of 8 to 14 digits found on the receipt as a clear, comma-separated list. Exclude any numbers that are clearly prices or quantities if possible, but prioritize returning any digit sequence that could be a barcode.`,
+    };
 
-      const result = await model.generateContent([promptPart, imagePart]);
-      const response = result.response;
-      const aiContent = response.text();
+    const result = await model.generateContent([promptPart, imagePart]);
+    const response = result.response;
+    const aiContent = response.text();
 
-      if (aiContent) {
-          // More aggressive barcode extraction using regex
-          const barcodeRegex = /\b\d{8,14}\b/g;
-          const potentialBarcodes = aiContent.match(barcodeRegex) || [];
-          const extractedBarcodes = [...new Set(potentialBarcodes.map(barcode => barcode.trim()).filter(barcode => barcode))];
+    if (aiContent) {
+      // More aggressive barcode extraction using regex
+      const barcodeRegex = /\b\d{8,14}\b/g;
+      const potentialBarcodes = aiContent.match(barcodeRegex) || [];
+      const extractedBarcodes = [
+        ...new Set(
+          potentialBarcodes
+            .map((barcode) => barcode.trim())
+            .filter((barcode) => barcode)
+        ),
+      ];
 
-          console.log("Potential Barcodes Extracted:", extractedBarcodes); // Debugging
+      console.log("Potential Barcodes Extracted:", extractedBarcodes); // Debugging
 
-          // Fetch items from the database based on the extracted barcodes
-          const itemsToAdd = await itemModel.find({ barcode: { $in: extractedBarcodes } });
+      // Fetch items from the database based on the extracted barcodes
+      const itemsToAdd = await itemModel.find({
+        barcode: { $in: extractedBarcodes },
+      });
 
-          if (itemsToAdd.length > 0) {
-              const cartItems = itemsToAdd.map(item => ({
-                  _id: item._id,
-                  quantity: 1, // Default quantity
-                  // You might want to include other relevant item details here if needed
-              }));
-              return res.status(200).json({ cartItems });
-          } else {
-              return res.status(200).json({ message: "No products found with the extracted barcodes." });
-          }
+      if (itemsToAdd.length > 0) {
+        const cartItems = itemsToAdd.map((item) => ({
+          _id: item._id,
+          quantity: 1, // Default quantity
+          // You might want to include other relevant item details here if needed
+        }));
+        return res.status(200).json({ cartItems });
       } else {
-          return res.status(500).json({ message: "Could not extract barcode information from the receipt." });
+        return res
+          .status(200)
+          .json({ message: "No products found with the extracted barcodes." });
       }
+    } else {
+      return res
+        .status(500)
+        .json({
+          message: "Could not extract barcode information from the receipt.",
+        });
+    }
   } catch (error) {
-      console.error("Error analyzing receipt:", error);
-      return res.status(500).json({ message: "Error analyzing receipt." });
+    console.error("Error analyzing receipt:", error);
+    return res.status(500).json({ message: "Error analyzing receipt." });
   }
 };
 
-export default { createItem, getItems, getItemById, updateItem, deleteItem,analyzeReceipt };
+export const checkPriceChanges = async (req: Request, res: Response) => {
+  try {
+    const { lastCheckedTimestamp, productIds } = req.query;
+
+    // Validate the timestamp if provided
+    if (
+      lastCheckedTimestamp &&
+      isNaN(Date.parse(lastCheckedTimestamp as string))
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Invalid lastCheckedTimestamp format" });
+    }
+
+    // Parse productIds if provided
+    const productIdsArray = productIds
+      ? (productIds as string).split(",")
+      : null;
+
+    // Build the query
+    const query: Record<string, unknown> = {};
+    if (lastCheckedTimestamp) {
+      query["storePrices.prices.date"] = {
+        $gt: new Date(lastCheckedTimestamp as string),
+      };
+    }
+    if (productIdsArray) {
+      query["_id"] = { $in: productIdsArray };
+    }
+
+    // Fetch items matching the query
+    const items = await itemModel.find(query).lean().exec();
+
+    const priceChanges: PriceChange[] = [];
+
+    for (const item of items) {
+      for (const storePrice of item.storePrices) {
+        if (!storePrice.prices || storePrice.prices.length < 2) continue;
+
+        const sortedPrices = [...storePrice.prices].sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+
+        const latestPrice = sortedPrices[0];
+        const previousPrice = sortedPrices[1];
+
+        if (latestPrice.price < previousPrice.price) {
+          priceChanges.push({
+            productId: String(item._id),
+            productName: item.name,
+            storeId: storePrice.storeId,
+            oldPrice: previousPrice.price,
+            newPrice: latestPrice.price,
+            changeDate: latestPrice.date,
+            image: item.image,
+          });
+        }
+      }
+    }
+
+    res.status(200).json(priceChanges);
+  } catch (error) {
+    console.error("Error checking price changes:", error);
+    res.status(500).json({ message: "Failed to check price changes" });
+  }
+};
+
+export default {
+  createItem,
+  getItems,
+  getItemById,
+  updateItem,
+  deleteItem,
+  analyzeReceipt,
+  checkPriceChanges,
+};

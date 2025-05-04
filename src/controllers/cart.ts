@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import cartModel from "../models/cart";
+import userModel from "../models/user";
+import { AuthenticatedRequest } from "./auth";
 
 export const createCart = async (req: Request, res: Response) => {
   try {
@@ -12,11 +14,19 @@ export const createCart = async (req: Request, res: Response) => {
   }
 };
 
-export const getCartById = async (req: Request, res: Response) => {
+export const getCartById = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    console.log("Fetching cart with ID:", req.params.id);
+    const userId = req.userId;
     const cart = await cartModel.findById(req.params.id);
     if (!cart) return res.status(404).json({ error: "Cart not found" });
+
+    const isAuthorized =
+      cart.ownerId === userId || cart.participants.includes(userId!);
+
+    if (!isAuthorized) {
+      return res.status(403).json({ error: "Unauthorized to view this cart" });
+    }
+
     res.status(200).json(cart);
   } catch (error) {
     console.error("Error fetching cart:", error);
@@ -24,13 +34,11 @@ export const getCartById = async (req: Request, res: Response) => {
   }
 };
 
-export const getCartsByUser = async (req: Request, res: Response) => {
+export const getCartsByUser = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.query.userId as string;
+    const userId = req.userId;
     if (!userId) {
-      return res
-        .status(400)
-        .json({ error: "userId query parameter is required" });
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
     console.log("Fetching carts for user:", userId);
@@ -44,36 +52,84 @@ export const getCartsByUser = async (req: Request, res: Response) => {
   }
 };
 
-export const updateCart = async (req: Request, res: Response) => {
+export const updateCart = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    console.log("Updating cart:", req.params.id, req.body);
-    const cart = await cartModel.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-    });
+    const userId = req.userId;
+    const cart = await cartModel.findById(req.params.id);
+    if (!cart) return res.status(404).json({ error: "Cart not found" });
 
-    if (!cart) {
-      return res.status(404).json({ error: "Cart not found" });
+    const isAuthorized =
+      cart.ownerId === userId || cart.participants.includes(userId!);
+
+    if (!isAuthorized) {
+      return res.status(403).json({ error: "Unauthorized to update this cart" });
     }
 
-    res.status(200).json(cart);
+    const updatedCart = await cartModel.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+
+    res.status(200).json(updatedCart);
   } catch (error) {
     console.error("Error updating cart:", error);
     res.status(500).json({ error: "Failed to update cart" });
   }
 };
 
-export const deleteCart = async (req: Request, res: Response) => {
+export const deleteCart = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    console.log("Deleting cart:", req.params.id);
-    const result = await cartModel.findByIdAndDelete(req.params.id);
+    const userId = req.userId;
+    const cart = await cartModel.findById(req.params.id);
+    if (!cart) return res.status(404).json({ error: "Cart not found" });
 
-    if (!result) {
-      return res.status(404).json({ error: "Cart not found" });
+    if (cart.ownerId !== userId) {
+      return res.status(403).json({ error: "Only the owner can delete the cart" });
     }
 
+    await cartModel.findByIdAndDelete(req.params.id);
     res.status(200).json({ message: "Cart deleted successfully" });
   } catch (error) {
     console.error("Error deleting cart:", error);
     res.status(500).json({ error: "Failed to delete cart" });
+  }
+};
+
+export const addParticipantToCart = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const cartId = req.params.id;
+    const { email } = req.body;
+    const requesterId = req.userId;
+
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+
+    const cart = await cartModel.findById(cartId);
+    if (!cart) {
+      return res.status(404).json({ error: "Cart not found" });
+    }
+
+    if (cart.ownerId !== requesterId) {
+      return res.status(403).json({ error: "Only the cart owner can add participants" });
+    }
+
+    const userToAdd = await userModel.findOne({ email });
+    if (!userToAdd) {
+      return res.status(404).json({ error: "User with this email not found" });
+    }
+
+    if (cart.participants.includes(userToAdd._id.toString())) {
+      return res.status(400).json({ error: "User is already a participant" });
+    }
+
+    cart.participants.push(userToAdd._id.toString());
+    await cart.save();
+
+    res.status(200).json({ message: "Participant added successfully", cart });
+  } catch (error) {
+    console.error("Error adding participant to cart:", error);
+    res.status(500).json({ error: "Failed to add participant" });
   }
 };

@@ -5,7 +5,11 @@ import {
   getCartsByUser,
   updateCart,
   deleteCart,
+  addParticipantToCart,
+  removeParticipantFromCart,
 } from "../controllers/cart";
+import { authMiddleware } from "../controllers/auth"; // Assuming you have an auth middleware
+
 
 const router = express.Router();
 
@@ -43,7 +47,7 @@ const router = express.Router();
  *       201:
  *         description: Cart created successfully
  */
-router.post("/", (req, res) => {
+router.post("/", authMiddleware, (req, res) => {
   createCart(req, res);
 });
 
@@ -65,7 +69,7 @@ router.post("/", (req, res) => {
  *       404:
  *         description: Cart not found
  */
-router.get("/:id", (req, res) => {
+router.get("/:id", authMiddleware, (req, res) => {
   getCartById(req, res);
 });
 
@@ -85,7 +89,7 @@ router.get("/:id", (req, res) => {
  *       200:
  *         description: List of carts
  */
-router.get("/", (req, res) => {
+router.get("/", authMiddleware, (req, res) => {
   getCartsByUser(req, res);
 });
 
@@ -125,7 +129,7 @@ router.get("/", (req, res) => {
  *       404:
  *         description: Cart not found
  */
-router.put("/:id", (req, res) => {
+router.put("/:id", authMiddleware, (req, res) => {
   updateCart(req, res);
 });
 
@@ -147,8 +151,79 @@ router.put("/:id", (req, res) => {
  *       404:
  *         description: Cart not found
  */
-router.delete("/:id", (req, res) => {
+router.delete("/:id", authMiddleware, (req, res) => {
   deleteCart(req, res);
 });
+
+/**
+ * @swagger
+ * /carts/{id}/participants:
+ *   put:
+ *     summary: Add a participant to a cart by email
+ *     tags: [Carts]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Participant added successfully
+ *       400:
+ *         description: Invalid input
+ *       403:
+ *         description: Unauthorized
+ *       404:
+ *         description: Cart or user not found
+ */
+router.put("/:id/participants", authMiddleware, (req, res) => {
+  addParticipantToCart(req, res);
+});
+
+/**
+ * @swagger
+ * /carts/{id}/participants/remove:
+ *   put:
+ *     summary: Remove a participant from a cart by user ID
+ *     tags: [Carts]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               userIdToRemove:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Participant removed successfully
+ *       400:
+ *         description: Invalid input
+ *       403:
+ *         description: Unauthorized
+ *       404:
+ *         description: Cart or user not found
+ */
+router.put("/:id/participants/remove", authMiddleware, (req, res) => {
+  removeParticipantFromCart(req, res);
+});
+
 
 export default router;

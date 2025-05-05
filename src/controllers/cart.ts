@@ -133,3 +133,40 @@ export const addParticipantToCart = async (req: AuthenticatedRequest, res: Respo
     res.status(500).json({ error: "Failed to add participant" });
   }
 };
+
+export const removeParticipantFromCart = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const cartId = req.params.id;
+    const { userIdToRemove } = req.body;
+    const requesterId = req.userId;
+
+    if (!userIdToRemove) {
+      return res.status(400).json({ error: "User ID to remove is required" });
+    }
+
+    const cart = await cartModel.findById(cartId);
+    if (!cart) {
+      return res.status(404).json({ error: "Cart not found" });
+    }
+
+    if (cart.ownerId !== requesterId) {
+      return res.status(403).json({ error: "Only the cart owner can remove participants" });
+    }
+
+    const index = cart.participants.findIndex(
+      (participantId) => participantId.toString() === userIdToRemove
+    );
+
+    if (index === -1) {
+      return res.status(404).json({ error: "User is not a participant in this cart" });
+    }
+
+    cart.participants.splice(index, 1);
+    await cart.save();
+
+    res.status(200).json({ message: "Participant removed successfully", cart });
+  } catch (error) {
+    console.error("Error removing participant from cart:", error);
+    res.status(500).json({ error: "Failed to remove participant" });
+  }
+};

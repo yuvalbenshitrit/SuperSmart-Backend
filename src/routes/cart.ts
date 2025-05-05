@@ -6,6 +6,7 @@ import {
   updateCart,
   deleteCart,
   addParticipantToCart,
+  removeParticipantFromCart,
 } from "../controllers/cart";
 import { authMiddleware } from "../controllers/auth"; // Assuming you have an auth middleware
 
@@ -188,5 +189,41 @@ router.delete("/:id", authMiddleware, (req, res) => {
 router.put("/:id/participants", authMiddleware, (req, res) => {
   addParticipantToCart(req, res);
 });
+
+/**
+ * @swagger
+ * /carts/{id}/participants/remove:
+ *   put:
+ *     summary: Remove a participant from a cart by user ID
+ *     tags: [Carts]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               userIdToRemove:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Participant removed successfully
+ *       400:
+ *         description: Invalid input
+ *       403:
+ *         description: Unauthorized
+ *       404:
+ *         description: Cart or user not found
+ */
+router.put("/:id/participants/remove", authMiddleware, (req, res) => {
+  removeParticipantFromCart(req, res);
+});
+
 
 export default router;

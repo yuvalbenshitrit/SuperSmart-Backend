@@ -11,6 +11,12 @@ export const createWishlist = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Name and userId are required" });
     }
 
+    // Ensure only one wishlist per user
+    const existingWishlist = await wishlistModel.findOne({ userId });
+    if (existingWishlist) {
+      return res.status(400).json({ error: "User already has a wishlist" });
+    }
+
     const wishlist = await wishlistModel.create({
       name,
       userId,
@@ -49,11 +55,12 @@ export const getWishlistsByUser = async (req: Request, res: Response) => {
         .json({ error: "userId query parameter is required" });
     }
 
-    const wishlists = await wishlistModel.find({ userId });
-    res.status(200).json(wishlists);
+    // Return the single wishlist as an array for compatibility
+    const wishlist = await wishlistModel.findOne({ userId });
+    res.status(200).json(wishlist ? [wishlist] : []);
   } catch (error) {
-    console.error("Error fetching user wishlists:", error);
-    res.status(500).json({ error: "Failed to fetch user wishlists" });
+    console.error("Error fetching user wishlist:", error);
+    res.status(500).json({ error: "Failed to fetch user wishlist" });
   }
 };
 
@@ -161,5 +168,56 @@ export const findWishlistsWithProduct = async (
   } catch (error) {
     console.error("Error finding wishlists with product:", error);
     return [];
+  }
+};
+
+export const getOrCreateSingleWishlist = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ error: "userId query parameter is required" });
+    }
+
+    let wishlist = await wishlistModel.findOne({ userId });
+
+    if (!wishlist) {
+      wishlist = await wishlistModel.create({
+        name: "Default Wishlist",
+        userId: userId as string,
+        products: [],
+      });
+    }
+
+    res.status(200).json(wishlist);
+  } catch (error) {
+    console.error("Error fetching or creating single wishlist:", error);
+    res.status(500).json({ error: "Failed to fetch or create wishlist" });
+  }
+};
+
+export const getWishlistByUserId = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ error: "userId parameter is required" });
+    }
+
+    const wishlist = await wishlistModel.findOne({ userId });
+
+    if (!wishlist) {
+      return res.status(404).json({ error: "Wishlist not found" });
+    }
+
+    res.status(200).json(wishlist);
+  } catch (error) {
+    console.error("Error fetching wishlist by userId:", error);
+    res.status(500).json({ error: "Failed to fetch wishlist" });
   }
 };

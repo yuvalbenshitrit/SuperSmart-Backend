@@ -7,6 +7,8 @@ import {
   deleteWishlist,
   addProductToWishlist,
   removeProductFromWishlist,
+  getOrCreateSingleWishlist, // Import the new controller
+  getWishlistByUserId, // Import the new controller
 } from "../controllers/wishlist";
 
 const router = express.Router();
@@ -198,6 +200,50 @@ router.post("/:id/products", (req, res) => {
  */
 router.delete("/:id/products", (req, res) => {
   removeProductFromWishlist(req, res);
+});
+
+/**
+ * @swagger
+ * /wishlists/single:
+ *   get:
+ *     summary: Get or create a single wishlist for a user
+ *     tags: [Wishlists]
+ *     parameters:
+ *       - in: query
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: The user's single wishlist
+ *       400:
+ *         description: Missing or invalid userId
+ */
+router.get("/single", (req, res) => {
+  getOrCreateSingleWishlist(req, res);
+});
+
+/**
+ * @swagger
+ * /wishlists/user/{userId}:
+ *   get:
+ *     summary: Get a user's wishlist by userId
+ *     tags: [Wishlists]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: The user's wishlist
+ *       404:
+ *         description: Wishlist not found
+ */
+router.get("/user/:userId", (req, res) => {
+  getWishlistByUserId(req, res);
 });
 
 export default router;

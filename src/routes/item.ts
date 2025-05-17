@@ -176,5 +176,41 @@ router.post("/analyze-receipt", upload.single("receiptImage"), (req, res) => {
 router.get("/price-changes", (req, res) => {
   itemController.checkPriceChanges(req, res);
 });
+/**
+ * @swagger
+ * /items/{productId}/predict:
+ * post:
+ * summary: Predict the price change of an item at a specific store using Gemini AI
+ * tags: [Items]
+ * parameters:
+ * - in: path
+ * name: productId
+ * required: true
+ * schema:
+ * type: string
+ * description: ID of the product to predict the price for.
+ * requestBody:
+ * required: true
+ * content:
+ * application/json:
+ * schema:
+ * type: object
+ * properties:
+ * storeId:
+ * type: string
+ * description: ID of the store to predict the price at.
+ * responses:
+ * 200:
+ * description: Successfully predicted the price change.
+ * 400:
+ * description: Missing or invalid productId or storeId.
+ * 404:
+ * description: Item not found.
+ * 500:
+ * description: Could not generate a price prediction.
+ */
+router.post("/:productId/predict", (req, res) => { 
+    itemController.predictPriceChange(req, res);
+  });
 
 export default router;

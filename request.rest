@@ -235,3 +235,15 @@ Content-Type: application/json
 
 ### מחיקת עגלה
 DELETE http://localhost:3000/cart/6804a224096351b9e364fa7e
+
+
+###
+GET http://localhost:3000/chat/123
+
+{
+  {
+    "sender": "Coral",
+    "message": "היי כולם",
+    "timestamp": "2025-05-14T18:00:00.000Z"
+  }
+}

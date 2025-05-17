@@ -14,6 +14,8 @@ import swaggerJsDoc from "swagger-jsdoc";
 import cors from "cors";
 import file_routes from "./routes/file_routes";
 import cartRoutes from "./routes/cart";
+import chatRoutes from "./routes/chat"
+import { setupWebsockets, io } from './services/websocket';
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -26,6 +28,7 @@ app.use("/cart", cartRoutes);
 app.use("/public", express.static("public"));
 app.use("/storage", express.static("storage"));
 app.use("/file", file_routes);
+app.use("/chat", chatRoutes)
 
 const options = {
   definition: {
@@ -47,7 +50,10 @@ const initApp = async () => {
   return new Promise<{ app: Express; server: http.Server }>(
     (resolve, reject) => {
       const server = http.createServer(app);
+      setupWebsockets(server);
 
+
+     
       // Detailed MongoDB Connection Options
       const mongoOptions = {
         serverSelectionTimeoutMS: 15000, // 15 seconds
@@ -92,5 +98,7 @@ const initApp = async () => {
     }
   );
 };
+
+export { io };
 
 export default initApp;

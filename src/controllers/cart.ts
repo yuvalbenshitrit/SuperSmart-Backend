@@ -2,11 +2,16 @@ import { Request, Response } from "express";
 import cartModel from "../models/cart";
 import userModel from "../models/user";
 import { AuthenticatedRequest } from "./auth";
+import itemModel from "../models/item"; // Import item model
 
 export const createCart = async (req: Request, res: Response) => {
   try {
     console.log("Creating cart with data:", req.body);
-    const cart = await cartModel.create(req.body);
+    const cartData = {
+      ...req.body,
+      notifications: req.body.notifications ?? true,
+    };
+    const cart = await cartModel.create(cartData);
     res.status(201).json(cart);
   } catch (error) {
     console.error("Error creating cart:", error);
@@ -34,7 +39,10 @@ export const getCartById = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
-export const getCartsByUser = async (req: AuthenticatedRequest, res: Response) => {
+export const getCartsByUser = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   try {
     const userId = req.userId;
     if (!userId) {
@@ -62,12 +70,17 @@ export const updateCart = async (req: AuthenticatedRequest, res: Response) => {
       cart.ownerId === userId || cart.participants.includes(userId!);
 
     if (!isAuthorized) {
-      return res.status(403).json({ error: "Unauthorized to update this cart" });
+      return res
+        .status(403)
+        .json({ error: "Unauthorized to update this cart" });
     }
 
     const updatedCart = await cartModel.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      {
+        ...req.body,
+        notifications: req.body.notifications ?? cart.notifications,
+      },
       { new: true }
     );
 
@@ -85,7 +98,9 @@ export const deleteCart = async (req: AuthenticatedRequest, res: Response) => {
     if (!cart) return res.status(404).json({ error: "Cart not found" });
 
     if (cart.ownerId !== userId) {
-      return res.status(403).json({ error: "Only the owner can delete the cart" });
+      return res
+        .status(403)
+        .json({ error: "Only the owner can delete the cart" });
     }
 
     await cartModel.findByIdAndDelete(req.params.id);
@@ -96,7 +111,10 @@ export const deleteCart = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
-export const addParticipantToCart = async (req: AuthenticatedRequest, res: Response) => {
+export const addParticipantToCart = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   try {
     const cartId = req.params.id;
     const { email } = req.body;
@@ -112,7 +130,9 @@ export const addParticipantToCart = async (req: AuthenticatedRequest, res: Respo
     }
 
     if (cart.ownerId !== requesterId) {
-      return res.status(403).json({ error: "Only the cart owner can add participants" });
+      return res
+        .status(403)
+        .json({ error: "Only the cart owner can add participants" });
     }
 
     const userToAdd = await userModel.findOne({ email });
@@ -134,7 +154,10 @@ export const addParticipantToCart = async (req: AuthenticatedRequest, res: Respo
   }
 };
 
-export const removeParticipantFromCart = async (req: AuthenticatedRequest, res: Response) => {
+export const removeParticipantFromCart = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   try {
     const cartId = req.params.id;
     const { userIdToRemove } = req.body;
@@ -150,7 +173,9 @@ export const removeParticipantFromCart = async (req: AuthenticatedRequest, res: 
     }
 
     if (cart.ownerId !== requesterId) {
-      return res.status(403).json({ error: "Only the cart owner can remove participants" });
+      return res
+        .status(403)
+        .json({ error: "Only the cart owner can remove participants" });
     }
 
     const index = cart.participants.findIndex(
@@ -158,7 +183,9 @@ export const removeParticipantFromCart = async (req: AuthenticatedRequest, res: 
     );
 
     if (index === -1) {
-      return res.status(404).json({ error: "User is not a participant in this cart" });
+      return res
+        .status(404)
+        .json({ error: "User is not a participant in this cart" });
     }
 
     cart.participants.splice(index, 1);
@@ -168,5 +195,67 @@ export const removeParticipantFromCart = async (req: AuthenticatedRequest, res: 
   } catch (error) {
     console.error("Error removing participant from cart:", error);
     res.status(500).json({ error: "Failed to remove participant" });
+  }
+};
+
+export const checkCartPriceDrops = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  try {
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    // Fetch all carts for the user
+    const carts = await cartModel.find({
+      $or: [{ ownerId: userId }, { participants: userId }],
+    });
+
+    if (!carts.length) {
+      return res.status(200).json([]);
+    }
+
+    // Collect all product IDs from the user's carts
+    const productIds = carts.flatMap((cart) =>
+      cart.items.map((item) => item.productId)
+    );
+
+    // Fetch items with price drops
+    const items = await itemModel.find({ _id: { $in: productIds } }).lean();
+
+    const priceDrops = [];
+
+    for (const item of items) {
+      for (const storePrice of item.storePrices) {
+        if (!storePrice.prices || storePrice.prices.length < 2) continue;
+
+        const sortedPrices = [...storePrice.prices].sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+
+        const latestPrice = sortedPrices[0];
+        const previousPrice = sortedPrices[1];
+
+        if (latestPrice.price < previousPrice.price) {
+          priceDrops.push({
+            productId: String(item._id),
+            productName: item.name,
+            storeId: storePrice.storeId,
+            oldPrice: previousPrice.price,
+            newPrice: latestPrice.price,
+            changeDate: latestPrice.date,
+            image: item.image,
+          });
+        }
+      }
+    }
+
+    res.status(200).json(priceDrops);
+  } catch (error) {
+    console.error("Error checking cart price drops:", error);
+    res.status(500).json({ error: "Failed to check cart price drops" });
   }
 };

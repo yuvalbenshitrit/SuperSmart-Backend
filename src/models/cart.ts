@@ -7,6 +7,7 @@ export interface iCart {
   items: { productId: string; quantity: number }[];
   createdAt?: Date;
   updatedAt?: Date;
+  notifications: boolean; // Explicitly required for clarity
 }
 
 const cartSchema = new mongoose.Schema<iCart>(
@@ -20,6 +21,7 @@ const cartSchema = new mongoose.Schema<iCart>(
         quantity: { type: Number, required: true },
       },
     ],
+    notifications: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

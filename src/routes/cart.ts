@@ -7,9 +7,9 @@ import {
   deleteCart,
   addParticipantToCart,
   removeParticipantFromCart,
+  checkCartPriceDrops, // Import the new controller
 } from "../controllers/cart";
 import { authMiddleware } from "../controllers/auth"; // Assuming you have an auth middleware
-
 
 const router = express.Router();
 
@@ -225,5 +225,22 @@ router.put("/:id/participants/remove", authMiddleware, (req, res) => {
   removeParticipantFromCart(req, res);
 });
 
+/**
+ * @swagger
+ * /carts/price-drops:
+ *   get:
+ *     summary: Get price drops for products in user's carts
+ *     tags: [Carts]
+ *     responses:
+ *       200:
+ *         description: List of price drops for cart products
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
+ */
+router.get("/price-drops", authMiddleware, (req, res) => {
+  checkCartPriceDrops(req, res);
+});
 
 export default router;

@@ -294,8 +294,7 @@ export const checkCartPriceDrops = async (
         const sortedPrices = normalizedPrices
           .filter((p) => p && p.date && typeof p.price === "number")
           .sort(
-            (a, b) =>
-              new Date(b.date).getTime() - new Date(a.date).getTime()
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
           );
 
         if (sortedPrices.length < 2) continue;
@@ -331,5 +330,10 @@ export const checkCartPriceDrops = async (
 
 // Type guard to check if the object has a `data` field
 function isDataField(obj: unknown): obj is { data: string } {
-  return typeof obj === "object" && obj !== null && "data" in obj && typeof (obj as { data: string }).data === "string";
+  return (
+    typeof obj === "object" &&
+    obj !== null &&
+    "data" in obj &&
+    typeof (obj as { data: string }).data === "string"
+  );
 }

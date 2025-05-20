@@ -146,7 +146,10 @@ export const notifyPriceChanges = (
         };
         // Removed unnecessary delete operation as cartId does not exist on the notification object
         io.to(`user-${wishlist.userId}`).emit("price-drop", notification);
-        console.log(`📣 Wishlist notification sent to user-${wishlist.userId}:`, notification);
+        console.log(
+          `📣 Wishlist notification sent to user-${wishlist.userId}:`,
+          notification
+        );
       });
     })
     .catch((error) => {
@@ -180,7 +183,9 @@ export const notifyCartPriceChanges = (
 
       const product = await itemModel.findById(priceChange.productId).lean();
       if (!product) {
-        console.error(`Product not found for productId: ${priceChange.productId}`);
+        console.error(
+          `Product not found for productId: ${priceChange.productId}`
+        );
         return;
       }
 
@@ -195,7 +200,10 @@ export const notifyCartPriceChanges = (
           };
 
           io.to(cartRoom).emit("price-drop", notification);
-          console.log(`📣 Cart notification sent to ${cartRoom}:`, notification);
+          console.log(
+            `📣 Cart notification sent to ${cartRoom}:`,
+            notification
+          );
         }
       });
     })

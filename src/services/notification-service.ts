@@ -73,7 +73,10 @@ export const findCartsWithProduct = async (productId: string) => {
 
 export const handleCartPriceChanges = async (priceChange: PriceChange) => {
   try {
-    console.log("Handling cart price change for productId:", priceChange.productId);
+    console.log(
+      "Handling cart price change for productId:",
+      priceChange.productId
+    );
     notifyCartPriceChanges(io, priceChange, { findCartsWithProduct });
   } catch (error) {
     console.error("Error handling cart price changes:", error);

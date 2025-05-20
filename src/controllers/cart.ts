@@ -2,11 +2,24 @@ import { Request, Response } from "express";
 import cartModel from "../models/cart";
 import userModel from "../models/user";
 import { AuthenticatedRequest } from "./auth";
-import itemModel from "../models/item"; // Import item model
+import itemModel, { IPrice } from "../models/item"; // Import IPrice
+import mongoose from "mongoose"; // Import mongoose for ObjectId validation
 
 export const createCart = async (req: Request, res: Response) => {
   try {
     console.log("Creating cart with data:", req.body);
+
+    // Validate items in the cart
+    if (req.body.items && Array.isArray(req.body.items)) {
+      for (const item of req.body.items) {
+        if (!item.productId || !mongoose.isValidObjectId(item.productId)) {
+          return res
+            .status(400)
+            .json({ error: `Invalid productId: ${item.productId}` });
+        }
+      }
+    }
+
     const cartData = {
       ...req.body,
       notifications: req.body.notifications ?? true,
@@ -73,6 +86,17 @@ export const updateCart = async (req: AuthenticatedRequest, res: Response) => {
       return res
         .status(403)
         .json({ error: "Unauthorized to update this cart" });
+    }
+
+    // Validate items in the cart
+    if (req.body.items && Array.isArray(req.body.items)) {
+      for (const item of req.body.items) {
+        if (!item.productId || !mongoose.isValidObjectId(item.productId)) {
+          return res
+            .status(400)
+            .json({ error: `Invalid productId: ${item.productId}` });
+        }
+      }
     }
 
     const updatedCart = await cartModel.findByIdAndUpdate(
@@ -206,8 +230,11 @@ export const checkCartPriceDrops = async (
     const userId = req.userId;
 
     if (!userId) {
+      console.error("Unauthorized request: Missing userId");
       return res.status(401).json({ error: "Unauthorized" });
     }
+
+    console.log("Fetching carts for user:", userId);
 
     // Fetch all carts for the user
     const carts = await cartModel.find({
@@ -215,26 +242,63 @@ export const checkCartPriceDrops = async (
     });
 
     if (!carts.length) {
+      console.log("No carts found for user:", userId);
       return res.status(200).json([]);
     }
 
+    console.log(`Found ${carts.length} carts for user:`, userId);
+
     // Collect all product IDs from the user's carts
     const productIds = carts.flatMap((cart) =>
-      cart.items.map((item) => item.productId)
+      Array.isArray(cart.items)
+        ? cart.items.map((item) => item && item.productId).filter(Boolean)
+        : []
     );
+
+    console.log("Collected product IDs from carts:", productIds);
+
+    if (!productIds.length) {
+      console.log("No valid product IDs found in carts for user:", userId);
+      return res.status(200).json([]);
+    }
 
     // Fetch items with price drops
     const items = await itemModel.find({ _id: { $in: productIds } }).lean();
 
+    console.log("Fetched items from database:", items);
+
     const priceDrops = [];
 
     for (const item of items) {
-      for (const storePrice of item.storePrices) {
-        if (!storePrice.prices || storePrice.prices.length < 2) continue;
+      if (!item || !Array.isArray(item.storePrices)) continue;
 
-        const sortedPrices = [...storePrice.prices].sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
+      for (const storePrice of item.storePrices) {
+        if (
+          !storePrice ||
+          !Array.isArray(storePrice.prices) ||
+          storePrice.prices.length < 2
+        )
+          continue;
+
+        // Normalize the price objects to ensure they have a `date` field
+        const normalizedPrices = storePrice.prices.map((p) => {
+          const date =
+            (p as IPrice).date ||
+            (isDataField(p) ? new Date(p.data) : undefined); // Use type guard for `data`
+          return {
+            date,
+            price: parseFloat((p as IPrice).price.toString()), // Ensure price is a number
+          };
+        });
+
+        const sortedPrices = normalizedPrices
+          .filter((p) => p && p.date && typeof p.price === "number")
+          .sort(
+            (a, b) =>
+              new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+
+        if (sortedPrices.length < 2) continue;
 
         const latestPrice = sortedPrices[0];
         const previousPrice = sortedPrices[1];
@@ -253,9 +317,19 @@ export const checkCartPriceDrops = async (
       }
     }
 
+    console.log("Price drops detected:", priceDrops);
+
     res.status(200).json(priceDrops);
   } catch (error) {
     console.error("Error checking cart price drops:", error);
-    res.status(500).json({ error: "Failed to check cart price drops" });
+    res.status(500).json({
+      error: "Failed to check cart price drops",
+      details: error instanceof Error ? error.message : String(error),
+    });
   }
 };
+
+// Type guard to check if the object has a `data` field
+function isDataField(obj: unknown): obj is { data: string } {
+  return typeof obj === "object" && obj !== null && "data" in obj && typeof (obj as { data: string }).data === "string";
+}

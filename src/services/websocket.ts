@@ -3,6 +3,7 @@
 import { Server as HTTPServer } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import CartMessage from "../models/cartMessage";
+import itemModel from "../models/item"; // Replace require() with import
 
 export let io: SocketIOServer;
 
@@ -138,12 +139,21 @@ export const notifyPriceChanges = (
     .findWishlistsWithProduct(priceChange.productId)
     .then((wishlists) => {
       wishlists.forEach((wishlist) => {
-        io.to(`user-${wishlist.userId}`).emit("price-drop", {
+        const notification = {
           ...priceChange,
           wishlistId: wishlist._id,
           wishlistName: wishlist.name,
-        });
+        };
+        // Removed unnecessary delete operation as cartId does not exist on the notification object
+        io.to(`user-${wishlist.userId}`).emit("price-drop", notification);
+        console.log(
+          `📣 Wishlist notification sent to user-${wishlist.userId}:`,
+          notification
+        );
       });
+    })
+    .catch((error) => {
+      console.error("Error notifying wishlists about price changes:", error);
     });
 };
 
@@ -165,16 +175,35 @@ export const notifyCartPriceChanges = (
 ): void => {
   cartService
     .findCartsWithProduct(priceChange.productId)
-    .then((carts) => {
+    .then(async (carts) => {
+      if (!carts.length) {
+        console.log(`No carts found for productId: ${priceChange.productId}`);
+        return;
+      }
+
+      const product = await itemModel.findById(priceChange.productId).lean();
+      if (!product) {
+        console.error(
+          `Product not found for productId: ${priceChange.productId}`
+        );
+        return;
+      }
+
       carts.forEach((cart) => {
         if (cart.notifications) {
           const cartRoom = `cart-${cart._id}`;
           const notification = {
             ...priceChange,
             cartId: cart._id, // Ensure cartId is included
+            productName: priceChange.productName || product.name,
+            image: priceChange.image || product.image,
           };
+
           io.to(cartRoom).emit("price-drop", notification);
-          console.log(`📣 Notification sent to ${cartRoom}:`, notification);
+          console.log(
+            `📣 Cart notification sent to ${cartRoom}:`,
+            notification
+          );
         }
       });
     })

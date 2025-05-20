@@ -73,6 +73,10 @@ export const findCartsWithProduct = async (productId: string) => {
 
 export const handleCartPriceChanges = async (priceChange: PriceChange) => {
   try {
+    console.log(
+      "Handling cart price change for productId:",
+      priceChange.productId
+    );
     notifyCartPriceChanges(io, priceChange, { findCartsWithProduct });
   } catch (error) {
     console.error("Error handling cart price changes:", error);
@@ -81,7 +85,8 @@ export const handleCartPriceChanges = async (priceChange: PriceChange) => {
 
 export const getCartPriceDrops = async () => {
   try {
-    return await axios.get(`${API_BASE_URL}/carts/price-drops`);
+    const response = await axios.get(`${API_BASE_URL}/carts/price-drops`);
+    return response.data;
   } catch (error) {
     console.error("Error fetching cart price drops:", error);
     throw error;

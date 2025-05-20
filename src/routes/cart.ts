@@ -53,6 +53,24 @@ router.post("/", authMiddleware, (req, res) => {
 
 /**
  * @swagger
+ * /carts/price-drops:
+ *   get:
+ *     summary: Get price drops for products in user's carts
+ *     tags: [Carts]
+ *     responses:
+ *       200:
+ *         description: List of price drops for cart products
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
+ */
+router.get("/price-drops", authMiddleware, (req, res) => {
+  checkCartPriceDrops(req, res);
+});
+
+/**
+ * @swagger
  * /carts/{id}:
  *   get:
  *     summary: Get cart by ID
@@ -223,24 +241,6 @@ router.put("/:id/participants", authMiddleware, (req, res) => {
  */
 router.put("/:id/participants/remove", authMiddleware, (req, res) => {
   removeParticipantFromCart(req, res);
-});
-
-/**
- * @swagger
- * /carts/price-drops:
- *   get:
- *     summary: Get price drops for products in user's carts
- *     tags: [Carts]
- *     responses:
- *       200:
- *         description: List of price drops for cart products
- *       401:
- *         description: Unauthorized
- *       500:
- *         description: Internal server error
- */
-router.get("/price-drops", authMiddleware, (req, res) => {
-  checkCartPriceDrops(req, res);
 });
 
 export default router;

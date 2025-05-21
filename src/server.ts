@@ -16,6 +16,7 @@ import file_routes from "./routes/file_routes";
 import cartRoutes from "./routes/cart";
 import chatRoutes from "./routes/chat"
 import { setupWebsockets, io } from './services/websocket';
+import emailRoutes from "./routes/email_routes";
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -29,6 +30,7 @@ app.use("/public", express.static("public"));
 app.use("/storage", express.static("storage"));
 app.use("/file", file_routes);
 app.use("/chat", chatRoutes)
+app.use("/", emailRoutes);
 
 const options = {
   definition: {

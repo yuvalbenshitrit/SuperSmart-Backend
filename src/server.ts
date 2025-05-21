@@ -1,9 +1,6 @@
 import express, { Express } from "express";
 import http from "http";
-
-const app = express();
 import dotenv from "dotenv";
-dotenv.config();
 import mongoose from "mongoose";
 import itemsRoutes from "./routes/item";
 import storesRoutes from "./routes/store";
@@ -14,14 +11,27 @@ import swaggerJsDoc from "swagger-jsdoc";
 import cors from "cors";
 import file_routes from "./routes/file_routes";
 import cartRoutes from "./routes/cart";
-import chatRoutes from "./routes/chat"
-import { setupWebsockets, io } from './services/websocket';
-import emailRoutes from "./routes/email_routes";
 
+import chatRoutes from "./routes/chat";
+import { setupWebsockets, io } from "./services/websocket";
+import emailRoutes from "./routes/email_routes";
+// Load environment variables based on the environment
+dotenv.config();
+if (process.env.NODE_ENV === "test") {
+  dotenv.config({ path: ".env_test" });
+} else {
+  dotenv.config({ path: ".env_dev" });
+}
+
+
+const app = express();
+
+// Middleware
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// Routes
 app.use("/items", itemsRoutes);
 app.use("/stores", storesRoutes);
 app.use("/auth", authRoutes);
@@ -32,6 +42,8 @@ app.use("/file", file_routes);
 app.use("/chat", chatRoutes)
 app.use("/", emailRoutes);
 
+
+// Swagger setup
 const options = {
   definition: {
     openapi: "3.0.0",
@@ -48,15 +60,14 @@ const options = {
 const specs = swaggerJsDoc(options);
 app.use("/api-docs", swaggerUI.serve, swaggerUI.setup(specs));
 
+// Initialize the app
 const initApp = async () => {
   return new Promise<{ app: Express; server: http.Server }>(
     (resolve, reject) => {
       const server = http.createServer(app);
       setupWebsockets(server);
 
-
-     
-      // Detailed MongoDB Connection Options
+      // MongoDB connection options
       const mongoOptions = {
         serverSelectionTimeoutMS: 15000, // 15 seconds
         socketTimeoutMS: 45000, // 45 seconds
@@ -70,7 +81,10 @@ const initApp = async () => {
       });
 
       mongoose.connection.on("connected", () => {
-        console.log("✅ Connected to MongoDB Successfully");
+        console.log(
+          "✅ Connected to MongoDB Successfully at:",
+          process.env.DB_CONNECT
+        );
       });
 
       mongoose.connection.on("disconnected", () => {
@@ -102,5 +116,4 @@ const initApp = async () => {
 };
 
 export { io };
-
 export default initApp;

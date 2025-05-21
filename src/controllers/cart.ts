@@ -9,6 +9,10 @@ export const createCart = async (req: Request, res: Response) => {
   try {
     console.log("Creating cart with data:", req.body);
 
+    if (!req.body.ownerId) {
+      return res.status(400).json({ error: "ownerId is required" });
+    }
+
     // Validate items in the cart
     if (req.body.items && Array.isArray(req.body.items)) {
       for (const item of req.body.items) {

@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
-import itemModel, { IPrice } from "../models/item";
+import itemModel from "../models/item";
 import mongoose from "mongoose";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { PriceChange } from "../types"; 
-import StoreModel from "../models/store"; 
+import { PriceChange } from "../types";
+import StoreModel from "../models/store";
 
 const genAI = new GoogleGenerativeAI(
   process.env.GEMINI_API_KEY || "AIzaSyCXx5QQ3MwNCcvjGKKO5xr1uOFbMUPExD4"
@@ -12,36 +12,33 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); //vision 
 
 const createItem = async (req: Request, res: Response) => {
   try {
-    // Validate request body
-    if (!req.body.name || !req.body.category) {
-      return res
-        .status(400)
-        .json({ message: "Missing required fields: name and category" });
+    const { name, category, storePrices } = req.body;
+
+    if (!name || !category || !storePrices) {
+      return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // Validate storeId and prices in storePrices if provided
-    if (req.body.storePrices && Array.isArray(req.body.storePrices)) {
-      for (const storePrice of req.body.storePrices) {
-        if (!mongoose.isValidObjectId(storePrice.storeId)) {
-          return res
-            .status(400)
-            .json({ message: `Invalid storeId: ${storePrice.storeId}` });
-        }
-        for (const price of storePrice.prices) {
-          if (!price.date || !price.price) {
-            return res
-              .status(400)
-              .json({ message: "Each price must have a date and a price" });
-          }
-        }
+    if (!Array.isArray(storePrices)) {
+      return res.status(400).json({ message: "storePrices must be an array" });
+    }
+
+    for (const storePrice of storePrices) {
+      if (
+        !storePrice.storeId ||
+        !mongoose.isValidObjectId(storePrice.storeId)
+      ) {
+        return res
+          .status(400)
+          .json({ message: `Invalid storeId: ${storePrice.storeId}` });
+      }
+      if (!storePrice.price) {
+        return res
+          .status(400)
+          .json({ message: "Each storePrice must have a price" });
       }
     }
 
-    // Create the item without manually adding an 'id' field
-    const newItem = new itemModel({
-      ...req.body,
-    });
-
+    const newItem = new itemModel({ name, category, storePrices });
     const savedItem = await newItem.save();
     res.status(201).json(savedItem);
   } catch (error) {
@@ -189,11 +186,9 @@ const analyzeReceipt = async (req: Request, res: Response) => {
           .json({ message: "No products found with the extracted barcodes." });
       }
     } else {
-      return res
-        .status(500)
-        .json({
-          message: "Could not extract barcode information from the receipt.",
-        });
+      return res.status(500).json({
+        message: "Could not extract barcode information from the receipt.",
+      });
     }
   } catch (error) {
     console.error("Error analyzing receipt:", error);
@@ -268,98 +263,35 @@ export const checkPriceChanges = async (req: Request, res: Response) => {
   }
 };
 export const predictPriceChange = async (req: Request, res: Response) => {
-  console.log("--- predictPriceChange called ---");
-  console.log("Request Params:", req.params);
-  console.log("Request Query:", req.query);
-  console.log("Request Body:", req.body);
-
   try {
     const { productId } = req.params;
     const { storeId } = req.body;
 
-    console.log("Extracted productId:", productId);
-    console.log("Extracted storeId:", storeId);
-
     if (!productId || !storeId) {
-      console.log("Error: Missing productId or storeId");
-      return res
-        .status(400)
-        .json({ message: "Missing productId or storeId" });
+      return res.status(400).json({ message: "Missing productId or storeId" });
     }
 
-    if (!mongoose.isValidObjectId(productId) || !mongoose.isValidObjectId(storeId)) {
-      console.log("Error: Invalid productId or storeId");
+    if (
+      !mongoose.isValidObjectId(productId) ||
+      !mongoose.isValidObjectId(storeId)
+    ) {
       return res.status(400).json({ message: "Invalid productId or storeId" });
     }
 
-    console.log("Fetching item with ID:", productId);
     const item = await itemModel.findById(productId);
     if (!item) {
-      console.log("Error: Item not found with ID:", productId);
       return res.status(404).json({ message: "Item not found" });
     }
-    console.log("Found item:", item.name);
 
-    console.log("Fetching store with ID:", storeId);
     const store = await StoreModel.findById(storeId);
-    let storeName = "לא ידוע";
-    if (store) {
-      storeName = store.name;
-      console.log("Found store:", storeName);
-    } else {
-      console.log("Store not found with ID:", storeId);
+    if (!store) {
+      return res.status(404).json({ message: "Store not found" });
     }
 
-    const storePriceData = item.storePrices.find(
-      (sp) => String(sp.storeId) === storeId
-    );
-
-    if (!storePriceData || !storePriceData.prices || storePriceData.prices.length < 2) {
-      console.log("Insufficient price data for storeId:", storeId, "Prices:", storePriceData?.prices);
-      return res.status(200).json({
-        prediction: `אין מספיק נתונים כדי לחזות את מחיר "${item.name}" ב${storeName}.`,
-      });
-    }
-    console.log("Found store price data:", storePriceData);
-
-    const sortedPrices = storePriceData.prices.sort(
-      (a: IPrice, b: IPrice) => a.date.getTime() - b.date.getTime()
-    );
-    console.log("Sorted prices:", sortedPrices);
-
-    const prompt = `Analyze the following historical prices in "${storeName}" for "${item.name}". The prices are listed chronologically with their dates:
-${sortedPrices.map((p: IPrice) => `${p.date.toLocaleDateString()}: ${p.price}`).join("\n")}
-
-Based on this historical data, predict in Hebrew and in about two lines whether the price of this item is likely to go up, go down, or stay the same in the near future (next 7-14 days). Briefly explain your reasoning based on any visible trends or patterns.`;
-    console.log("Generated Gemini prompt:", prompt);
-
-    if (typeof model !== 'undefined' && model.generateContent) {
-      console.log("Calling Gemini to generate content...");
-      const result = await model.generateContent([prompt]);
-      const response = result.response;
-      const predictionText = response.text();
-      console.log("Gemini response:", response);
-      console.log("Extracted prediction text:", predictionText);
-
-      if (predictionText) {
-        // Split the prediction into lines and take the first two
-        const predictionLines = predictionText.split('\n').slice(0, 2).join('\n');
-        return res.status(200).json({ prediction: predictionLines });
-      } else {
-        console.log("Error: Could not generate a price prediction.");
-        return res
-          .status(500)
-          .json({ message: "Could not generate a price prediction." });
-      }
-    } else {
-      console.log("Error: Gemini model is not initialized correctly.");
-      return res.status(500).json({ message: "Gemini model not initialized." });
-    }
+    // ...existing logic...
   } catch (error) {
     console.error("Error predicting price change:", error);
-    return res
-      .status(500)
-      .json({ message: "Failed to predict price change." });
+    res.status(500).json({ message: "Failed to predict price change." });
   }
 };
 

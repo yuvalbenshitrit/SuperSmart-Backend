@@ -247,3 +247,14 @@ GET http://localhost:3000/chat/123
     "timestamp": "2025-05-14T18:00:00.000Z"
   }
 }
+
+
+###
+POST http://localhost:3000/send-cart-email
+Content-Type: application/json
+
+{
+  "email": "yuval056@gmail.com",
+  "cart": ["Product A", "Product B", "Product C"]
+}
+

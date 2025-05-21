@@ -11,9 +11,10 @@ import swaggerJsDoc from "swagger-jsdoc";
 import cors from "cors";
 import file_routes from "./routes/file_routes";
 import cartRoutes from "./routes/cart";
+
 import chatRoutes from "./routes/chat";
 import { setupWebsockets, io } from "./services/websocket";
-
+import emailRoutes from "./routes/email_routes";
 // Load environment variables based on the environment
 dotenv.config();
 if (process.env.NODE_ENV === "test") {
@@ -21,6 +22,7 @@ if (process.env.NODE_ENV === "test") {
 } else {
   dotenv.config({ path: ".env_dev" });
 }
+
 
 const app = express();
 
@@ -37,7 +39,9 @@ app.use("/cart", cartRoutes);
 app.use("/public", express.static("public"));
 app.use("/storage", express.static("storage"));
 app.use("/file", file_routes);
-app.use("/chat", chatRoutes);
+app.use("/chat", chatRoutes)
+app.use("/", emailRoutes);
+
 
 // Swagger setup
 const options = {

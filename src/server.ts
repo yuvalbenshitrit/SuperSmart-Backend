@@ -15,6 +15,9 @@ import cartRoutes from "./routes/cart";
 import chatRoutes from "./routes/chat";
 import { setupWebsockets, io } from "./services/websocket";
 import emailRoutes from "./routes/email_routes";
+
+import mapSupermarketsRoutes from "./routes/mapSupers";
+
 // Load environment variables based on the environment
 dotenv.config();
 if (process.env.NODE_ENV === "test") {
@@ -22,6 +25,7 @@ if (process.env.NODE_ENV === "test") {
 } else {
   dotenv.config({ path: ".env_dev" });
 }
+
 
 
 const app = express();
@@ -41,6 +45,7 @@ app.use("/storage", express.static("storage"));
 app.use("/file", file_routes);
 app.use("/chat", chatRoutes)
 app.use("/", emailRoutes);
+app.use("/",mapSupermarketsRoutes);
 
 
 // Swagger setup

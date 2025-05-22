@@ -59,12 +59,11 @@ const googleSignIn = async (req: Request, res: Response) => {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken, // ✅ שליחה ללקוח
     });
-
   } catch (err) {
     console.error("Google sign in error:", err);
-    return res.status(400).send(
-      err instanceof Error ? err.message : "An error occurred"
-    );
+    return res
+      .status(400)
+      .send(err instanceof Error ? err.message : "An error occurred");
   }
 };
 
@@ -187,35 +186,39 @@ const validateRefreshToken = (refreshToken: string | undefined) => {
         return;
       }
 
-      jwt.verify(refreshToken, process.env.TOKEN_SECRET, async (err, payload) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-
-        const userId = (payload as Payload)._id;
-        try {
-          const user = await userModel.findById(userId);
-          if (!user) {
-            reject("error");
-            return;
-          }
-
-          if (
-            !user.refreshTokens ||
-            !user.refreshTokens.includes(refreshToken)
-          ) {
-            user.refreshTokens = [];
-            await user.save();
+      jwt.verify(
+        refreshToken,
+        process.env.TOKEN_SECRET,
+        async (err, payload) => {
+          if (err) {
             reject(err);
             return;
           }
 
-          resolve(user);
-        } catch (err) {
-          reject(err);
+          const userId = (payload as Payload)._id;
+          try {
+            const user = await userModel.findById(userId);
+            if (!user) {
+              reject("error");
+              return;
+            }
+
+            if (
+              !user.refreshTokens ||
+              !user.refreshTokens.includes(refreshToken)
+            ) {
+              user.refreshTokens = [];
+              await user.save();
+              reject(err);
+              return;
+            }
+
+            resolve(user);
+          } catch (err) {
+            reject(err);
+          }
         }
-      });
+      );
     }
   );
 };
@@ -241,7 +244,10 @@ const updateUser = async (req: Request, res: Response) => {
   }
 };
 
-const changePassword = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+const changePassword = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
   const { id, currentPassword, newPassword } = req.body; // ✅ קבלת id מתוך body
   const userIdFromToken = req.userId;
 
@@ -279,16 +285,22 @@ const changePassword = async (req: AuthenticatedRequest, res: Response): Promise
   }
 };
 
-
 const logout = async (req: Request, res: Response) => {
   try {
-    const user = await validateRefreshToken(req.body.refreshToken);
+    const refreshToken = req.body.refreshToken;
+
+    if (!refreshToken) {
+      return res.status(400).send("Refresh token is required");
+    }
+
+    const user = await validateRefreshToken(refreshToken).catch(() => null);
     if (!user) {
       return res.status(400).send("Invalid refresh token");
     }
 
-    // 🧹 מוחק את כל ה־tokens של המשתמש
-    user.refreshTokens = [];
+    user.refreshTokens = (user.refreshTokens ?? []).filter(
+      (token) => token !== refreshToken
+    );
     await user.save();
 
     res.status(200).send("Logged out from all sessions");
@@ -297,7 +309,6 @@ const logout = async (req: Request, res: Response) => {
     res.status(400).send("Logout failed");
   }
 };
-
 
 const refresh = async (req: Request, res: Response) => {
   try {

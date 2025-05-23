@@ -70,6 +70,15 @@ export const setupWebsockets = (server: HTTPServer) => {
 
           // שלח לכל חברי העגלה (חדר) כולל השולח
           io.to(`cart-${cartId}`).emit("receive-message", messageToSend);
+
+          // 📢 Emit notification for new message
+          io.to(`cart-${cartId}`).emit("new-chat-notification", {
+            cartId,
+            sender,
+            message:
+              message.length > 30 ? message.substring(0, 30) + "..." : message, // Shortened message
+            timestamp: newMessage.timestamp.toISOString(),
+          });
         } catch (err) {
           console.error("❌ Error saving chat message:", err);
           // אופציונלי: שלח התראת שגיאה למשתמש (לא חובה)

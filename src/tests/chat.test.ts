@@ -10,7 +10,6 @@ beforeAll(async () => {
   const { app: initializedApp } = await initApp();
   app = initializedApp;
 
-  // Create a test cart
   const cartResponse = await request(app).post("/cart").send({
     name: "Test Cart",
     ownerId: new mongoose.Types.ObjectId().toString(),
@@ -30,29 +29,32 @@ describe("Chat test suite", () => {
       sender: "Test User",
       message: "Hello, this is a test message!",
     });
-    expect(response.statusCode).toBe(404); // Updated to match actual response
+    expect(response.statusCode).toBe(201);
+    expect(response.body.sender).toBe("Test User");
+    expect(response.body.message).toBe("Hello, this is a test message!");
   });
 
   test("Fail to add a message without required fields", async () => {
     const response = await request(app).post(`/chat/${cartId}`).send({});
-    expect(response.statusCode).toBe(404);
-    expect(response.body.error).toBe(undefined);
+    expect(response.statusCode).toBe(400);
+    expect(response.body.error).toBe("Cart ID, sender and message are required");
   });
 
   test("Get messages for a cart", async () => {
     const response = await request(app).get(`/chat/${cartId}`);
-    expect(response.statusCode).toBe(404); // Updated to match actual response
+    expect(response.statusCode).toBe(200);
+    expect(Array.isArray(response.body)).toBe(true);
   });
 
   test("Fail to get messages with invalid cart ID format", async () => {
     const response = await request(app).get("/chat/invalidCartId");
-    expect(response.statusCode).toBe(404); // Updated to match actual response
-    expect(response.body.error).toBe(undefined); // Updated to match actual response
+    expect(response.statusCode).toBe(500);
+    expect(response.body.error).toBe("Failed to fetch messages");
   });
 });
 
 describe("Additional Chat test cases", () => {
-  test("Fail to add a message with missing cartId", async () => {
+  test("Fail to add a message with missing cartId (route not found)", async () => {
     const response = await request(app).post("/chat/").send({
       sender: "Test User",
       message: "Message without cartId",
@@ -60,10 +62,11 @@ describe("Additional Chat test cases", () => {
     expect(response.statusCode).toBe(404);
   });
 
-  test("Fail to get messages for a non-existing cart", async () => {
+  test("Get messages for a non-existing cart", async () => {
     const nonExistingCartId = new mongoose.Types.ObjectId().toString();
     const response = await request(app).get(`/chat/${nonExistingCartId}`);
-    expect(response.statusCode).toBe(404); // Updated to match actual response
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual([]);
   });
 
   test("Get messages with 'before' timestamp", async () => {
@@ -71,7 +74,8 @@ describe("Additional Chat test cases", () => {
     const response = await request(app)
       .get(`/chat/${cartId}`)
       .query({ before: beforeDate });
-    expect(response.statusCode).toBe(404); // Updated to match actual response
+    expect(response.statusCode).toBe(200);
+    expect(Array.isArray(response.body)).toBe(true);
   });
 
   test("Fail to add a message with invalid cartId", async () => {
@@ -79,11 +83,11 @@ describe("Additional Chat test cases", () => {
       sender: "Test User",
       message: "Invalid cartId test",
     });
-    expect(response.statusCode).toBe(404); // Updated to match actual response
-    expect(response.body.error).toBe(undefined); // Updated to match actual response
+    expect(response.statusCode).toBe(500);
+    expect(response.body.error).toBe("Failed to add message");
   });
 
-  test("Fail to get messages with missing cartId", async () => {
+  test("Fail to get messages with missing cartId (route not found)", async () => {
     const response = await request(app).get("/chat/");
     expect(response.statusCode).toBe(404);
   });

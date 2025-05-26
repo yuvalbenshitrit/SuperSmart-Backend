@@ -39,11 +39,11 @@ export const createCart = async (req: Request, res: Response) => {
 export const getCartById = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.userId;
-    const cart = await cartModel.findById(req.params.id);
+    const cart = await cartModel.findById(req.params.id).populate("participants", "userName email");
     if (!cart) return res.status(404).json({ error: "Cart not found" });
 
     const isAuthorized =
-      cart.ownerId === userId || cart.participants.includes(userId!);
+    cart.ownerId === userId || cart.participants.some(p => p._id.toString() === userId);
 
     if (!isAuthorized) {
       return res.status(403).json({ error: "Unauthorized to view this cart" });
@@ -68,8 +68,9 @@ export const getCartsByUser = async (
 
     console.log("Fetching carts for user:", userId);
     const carts = await cartModel.find({
-      $or: [{ ownerId: userId }, { participants: userId }],
-    });
+  $or: [{ ownerId: userId }, { participants: userId }],
+}).populate("participants", "userName email");
+
     res.status(200).json(carts);
   } catch (error) {
     console.error("Error fetching user carts:", error);
@@ -84,7 +85,8 @@ export const updateCart = async (req: AuthenticatedRequest, res: Response) => {
     if (!cart) return res.status(404).json({ error: "Cart not found" });
 
     const isAuthorized =
-      cart.ownerId === userId || cart.participants.includes(userId!);
+  cart.ownerId === userId || cart.participants.some(p => p._id.toString() === userId);
+
 
     if (!isAuthorized) {
       return res
@@ -168,11 +170,13 @@ export const addParticipantToCart = async (
       return res.status(404).json({ error: "User with this email not found" });
     }
 
-    if (cart.participants.includes(userToAdd._id.toString())) {
+    if (cart.participants.some(p => p._id.toString() === userToAdd._id.toString())) {
       return res.status(400).json({ error: "User is already a participant" });
     }
 
-    cart.participants.push(userToAdd._id.toString());
+    cart.participants.push(new mongoose.Types.ObjectId(userToAdd._id));
+
+
     await cart.save();
 
     res.status(200).json({ message: "Participant added successfully", cart });

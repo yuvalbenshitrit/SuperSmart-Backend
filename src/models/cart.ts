@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 export interface iCart {
   name?: string;
   ownerId: string;
-  participants: string[];
+  participants: mongoose.Types.ObjectId[]; 
   items: { productId: string; quantity: number }[];
   createdAt?: Date;
   updatedAt?: Date;
@@ -14,7 +14,7 @@ const cartSchema = new mongoose.Schema<iCart>(
   {
     name: { type: String },
     ownerId: { type: String, required: true },
-    participants: { type: [String], default: [] },
+    participants: [{ type: mongoose.Schema.Types.ObjectId, ref: "users" }],
     items: [
       {
         productId: { type: String, required: true },

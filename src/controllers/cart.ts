@@ -39,7 +39,7 @@ export const createCart = async (req: Request, res: Response) => {
 export const getCartById = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.userId;
-    const cart = await cartModel.findById(req.params.id).populate("participants", "userName email");
+    const cart = await cartModel.findById(req.params.id).populate("participants", "userName email profilePicture");
     if (!cart) return res.status(404).json({ error: "Cart not found" });
 
     const isAuthorized =
@@ -69,7 +69,7 @@ export const getCartsByUser = async (
     console.log("Fetching carts for user:", userId);
     const carts = await cartModel.find({
   $or: [{ ownerId: userId }, { participants: userId }],
-}).populate("participants", "userName email");
+}).populate("participants", "userName email profilePicture");
 
     res.status(200).json(carts);
   } catch (error) {

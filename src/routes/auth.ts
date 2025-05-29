@@ -257,6 +257,72 @@ router.delete("/:id/cart", (req, res) => {
   authController.deleteCartItem(req, res);
 });
 
+/**
+ * @swagger
+ * /auth/request-password-reset:
+ *   post:
+ *     summary: Request a password reset link via email
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: "user@example.com"
+ *     responses:
+ *       200:
+ *         description: Reset email sent (currently only logged)
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
+router.post("/request-password-reset", (req, res) => {
+  authController.requestPasswordReset(req, res);
+});
+
+/**
+ * @swagger
+ * /auth/reset-password:
+ *   post:
+ *     summary: Reset password using token
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *               - newPassword
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 description: The reset token sent to the user
+ *                 example: "f23a1b4c..."
+ *               newPassword:
+ *                 type: string
+ *                 description: The new password to set
+ *                 example: "MyNewStrongPassword123"
+ *     responses:
+ *       200:
+ *         description: Password has been reset
+ *       400:
+ *         description: Invalid or expired token
+ *       500:
+ *         description: Internal server error
+ */
+router.post("/reset-password", (req, res) => {
+  authController.resetPassword(req, res);
+}
+);
 
 
 export default router;

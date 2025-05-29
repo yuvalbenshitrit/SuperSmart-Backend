@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import jwt, { SignOptions } from "jsonwebtoken";
 import { Document } from "mongoose";
 import { OAuth2Client } from "google-auth-library";
+import crypto from "crypto";
 
 // טיפוס מותאם אישית שמכיל userId מה-JWT
 export interface AuthenticatedRequest extends Request {
@@ -285,6 +286,44 @@ const changePassword = async (
   }
 };
 
+const requestPasswordReset = async (req: Request, res: Response) => {
+  const { email } = req.body;
+
+  const user = await userModel.findOne({ email });
+  if (!user) return res.status(404).send({ error: "User not found" });
+
+  const token = crypto.randomBytes(32).toString("hex");
+  const expires = new Date(Date.now() + 3600000); // שעה קדימה
+
+  user.resetPasswordToken = token;
+  user.resetPasswordExpires = expires;
+  await user.save();
+
+  // הדפסת קישור במקום שליחה במייל
+  console.log(`Reset link: http://yourfrontend.com/reset-password/${token}`);
+
+  res.send({ message: "Reset email sent (log only for now)" });
+};
+
+const resetPassword = async (req: Request, res: Response) => {
+  const { token, newPassword } = req.body;
+
+  const user = await userModel.findOne({
+    resetPasswordToken: token,
+    resetPasswordExpires: { $gt: Date.now() },
+  });
+
+  if (!user) return res.status(400).send({ error: "Invalid or expired token" });
+
+  const hashed = await bcrypt.hash(newPassword, 10);
+  user.password = hashed;
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpires = undefined;
+  await user.save();
+
+  res.send({ message: "Password has been reset" });
+};
+
 const logout = async (req: Request, res: Response) => {
   try {
     const refreshToken = req.body.refreshToken;
@@ -425,4 +464,6 @@ export default {
   updateCart,
   deleteCartItem,
   changePassword,
+  requestPasswordReset,
+  resetPassword,
 };

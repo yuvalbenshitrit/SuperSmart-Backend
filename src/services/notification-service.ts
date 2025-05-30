@@ -63,6 +63,7 @@ export const findCartsWithProduct = async (productId: string) => {
         carts.map((cart) => ({
           ...cart,
           _id: cart._id.toString(), // Convert _id to string
+          participants: cart.participants.map((participant) => participant.toString()), // Convert each participant ObjectId to string
         }))
       );
   } catch (error) {

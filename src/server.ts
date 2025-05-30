@@ -41,12 +41,11 @@ app.use("/stores", storesRoutes);
 app.use("/auth", authRoutes);
 app.use("/cart", cartRoutes);
 app.use("/public", express.static("public"));
-app.use("/storage", express.static("storage"));
 app.use("/file", file_routes);
 app.use("/chat", chatRoutes)
 app.use("/", emailRoutes);
 app.use("/",mapSupermarketsRoutes);
-
+app.use(express.static("front"));
 
 // Swagger setup
 const options = {
@@ -57,7 +56,10 @@ const options = {
       version: "1.0.0",
       description: "REST server including authentication using JWT",
     },
-    servers: [{ url: "http://localhost:" + process.env.PORT }],
+    servers: [{ url: "http://localhost:" + process.env.PORT },
+      { url: "http://10.10.248.141", },
+      { url: "https://10.10.248.141", }
+    ],
   },
   apis: ["./src/routes/*.ts"],
 };

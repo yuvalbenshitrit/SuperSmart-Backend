@@ -9,6 +9,9 @@ export interface iUser {
   profilePicture?: string;
   googleId?: string;
   cart?: { productId: string; quantity: number }[];
+   resetPasswordToken?: string;
+   resetPasswordExpires?: Date;
+
 }
 
 const userSchema = new mongoose.Schema<iUser>({
@@ -46,6 +49,13 @@ const userSchema = new mongoose.Schema<iUser>({
     ],
     default: [],
   },
+  resetPasswordToken: {
+  type: String,
+},
+resetPasswordExpires: {
+  type: Date,
+},
+
 });
 
 const userModel = mongoose.model<iUser>("users", userSchema);

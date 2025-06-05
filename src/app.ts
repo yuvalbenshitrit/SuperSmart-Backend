@@ -1,11 +1,13 @@
 import initApp from "./server";
-import cartRoutes from "./routes/cart";
-import wishlistRoutes from "./routes/wishlist";
 import https from "https";
 import fs from "fs";
 
 
 const port = process.env.PORT;
+if (!port) {
+  console.error("❌ PORT is not defined in environment variables.");
+  process.exit(1);
+}
 
 initApp()
   .then(({ app, server }) => {
@@ -16,9 +18,6 @@ initApp()
       next();
     });
 
-    app.use("/carts", cartRoutes);
-    app.use("/wishlists", wishlistRoutes);
-
     if(process.env.NODE_ENV != "production") {
 
       server.listen(port, () => {
@@ -28,7 +27,7 @@ initApp()
       });
     }
     else {
-      const prop = {
+       const prop = {
         key: fs.readFileSync("../client-key.pem"),
         cert: fs.readFileSync("../client-cert.pem"),
       }

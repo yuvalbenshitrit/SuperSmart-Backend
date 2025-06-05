@@ -11,27 +11,31 @@ import swaggerJsDoc from "swagger-jsdoc";
 import cors from "cors";
 import file_routes from "./routes/file_routes";
 import cartRoutes from "./routes/cart";
-
 import chatRoutes from "./routes/chat";
 import { setupWebsockets, io } from "./services/websocket";
 import emailRoutes from "./routes/email_routes";
-
+import wishlistRoutes from "./routes/wishlist";
 import mapSupermarketsRoutes from "./routes/mapSupers";
 
+
 // Load environment variables based on the environment
-dotenv.config();
 if (process.env.NODE_ENV === "test") {
   dotenv.config({ path: ".env_test" });
-} else {
+} else if (process.env.NODE_ENV === "dev") {
   dotenv.config({ path: ".env_dev" });
+} else {
+  dotenv.config(); // loads default .env if none specified
 }
 
 
 
 const app = express();
 
-// Middleware
-app.use(cors());
+
+app.use(cors({
+  origin: ['http://localhost:3000', 'https://10.10.248.141','https://supersmart.cs.colman.ac.il'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+}));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -45,6 +49,7 @@ app.use("/file", file_routes);
 app.use("/chat", chatRoutes)
 app.use("/", emailRoutes);
 app.use("/",mapSupermarketsRoutes);
+app.use("/wishlists", wishlistRoutes);
 app.use(express.static("front"));
 
 // Swagger setup
@@ -58,7 +63,8 @@ const options = {
     },
     servers: [{ url: "http://localhost:" + process.env.PORT },
       { url: "http://10.10.248.141", },
-      { url: "https://10.10.248.141", }
+      { url: "https://10.10.248.141", },
+      { url: "https://supersmart.cs.colman.ac.il"}
     ],
   },
   apis: ["./src/routes/*.ts"],

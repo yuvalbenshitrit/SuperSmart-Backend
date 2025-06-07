@@ -10,12 +10,19 @@ export let io: SocketIOServer;
 export const setupWebsockets = (server: HTTPServer) => {
   io = new SocketIOServer(server, {
     cors: {
-      origin: "*", // החלף לדומיין ב-production
+      origin: [
+        "https://supersmart.cs.colman.ac.il", 
+        "http://localhost:3000",
+        "http://10.10.248.141",
+        "https://10.10.248.141"
+      ],
+       credentials: true,
       methods: ["GET", "POST"],
     },
     // הגדרות נוספות לטיפול בחיבורים נופלים
     pingTimeout: 60000,
     pingInterval: 25000,
+     transports: ['websocket', 'polling'],
   });
 
   io.on("connection", (socket: Socket) => {

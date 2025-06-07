@@ -3,7 +3,8 @@ import { io, notifyCartPriceChanges } from "./websocket"; // Import 'io'
 import cartModel from "../models/cart";
 
 
-const API_BASE_URL = process.env.DOMAIN_BASE || "http://localhost:3000";
+const API_BASE_URL = process.env.DOMAIN_BASE|| "https://supersmart.cs.colman.ac.il";
+
 
 interface PriceChange {
   productId: string;

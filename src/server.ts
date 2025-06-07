@@ -2,6 +2,7 @@ import express, { Express } from "express";
 import http from "http";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
+import path from "path";
 import itemsRoutes from "./routes/item";
 import storesRoutes from "./routes/store";
 import bodyParser from "body-parser";
@@ -11,10 +12,11 @@ import swaggerJsDoc from "swagger-jsdoc";
 import cors from "cors";
 import file_routes from "./routes/file_routes";
 import cartRoutes from "./routes/cart";
+import wishlistRoutes from "./routes/wishlist";
 import chatRoutes from "./routes/chat";
 import { setupWebsockets, io } from "./services/websocket";
 import emailRoutes from "./routes/email_routes";
-import wishlistRoutes from "./routes/wishlist";
+
 import mapSupermarketsRoutes from "./routes/mapSupers";
 
 
@@ -43,13 +45,18 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use("/items", itemsRoutes);
 app.use("/stores", storesRoutes);
 app.use("/auth", authRoutes);
-app.use("/cart", cartRoutes);
+//app.use("/cart", cartRoutes);
+app.use("/carts", cartRoutes);
+app.use("/wishlists", wishlistRoutes);
 app.use("/public", express.static("public"));
 app.use("/file", file_routes);
 app.use("/chat", chatRoutes)
 app.use("/", emailRoutes);
+
 app.use("/",mapSupermarketsRoutes);
 app.use("/wishlists", wishlistRoutes);
+
+
 app.use(express.static("front"));
 
 // Swagger setup
@@ -62,9 +69,12 @@ const options = {
       description: "REST server including authentication using JWT",
     },
     servers: [{ url: "http://localhost:" + process.env.PORT },
-      { url: "http://10.10.248.141", },
-      { url: "https://10.10.248.141", },
-      { url: "https://supersmart.cs.colman.ac.il"}
+
+    { url: "http://10.10.248.141", },
+    { url: "https://10.10.248.141", },
+    { url: "https://supersmart.cs.colman.ac.il" }
+
+
     ],
   },
   apis: ["./src/routes/*.ts"],
@@ -73,12 +83,21 @@ const options = {
 const specs = swaggerJsDoc(options);
 app.use("/api-docs", swaggerUI.serve, swaggerUI.setup(specs));
 
+app.use("/", express.static("front"));
+app.use((req, res) => {
+  res.status(200).sendFile(path.join(__dirname, "../../front/index.html"));
+});
+
 // Initialize the app
 const initApp = async () => {
   return new Promise<{ app: Express; server: http.Server }>(
     (resolve, reject) => {
       const server = http.createServer(app);
-      setupWebsockets(server);
+
+      // Only set up WebSockets here for non-production
+      if (process.env.NODE_ENV !== "production") {
+        setupWebsockets(server);
+      }
 
       // MongoDB connection options
       const mongoOptions = {

@@ -25,8 +25,8 @@ initApp()
     }
     else {
        const prop = {
-        key: fs.readFileSync("../client-key.pem"),
-        cert: fs.readFileSync("../client-cert.pem"),
+         key: fs.readFileSync('./ssl/myserver.key'),  
+         cert: fs.readFileSync('./ssl/CSB.crt'),
       }
       // Create HTTPS server and set up WebSockets with it
       const httpsServer = https.createServer(prop, app);

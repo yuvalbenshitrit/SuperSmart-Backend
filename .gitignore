@@ -5,3 +5,5 @@ storage/
 .env/
 .env_dev/
 .env_test/
+.env_prod/
+/ssl/

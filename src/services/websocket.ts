@@ -85,6 +85,7 @@ export const setupWebsockets = (server: HTTPServer) => {
             message:
               message.length > 30 ? message.substring(0, 30) + "..." : message, // Shortened message
             timestamp: newMessage.timestamp.toISOString(),
+            clientId,
           });
         } catch (err) {
           console.error("❌ Error saving chat message:", err);

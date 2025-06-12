@@ -18,9 +18,11 @@ initApp()
 
     if(process.env.NODE_ENV != "production") {
       server.listen(port, () => {
+        setupWebsockets(server); 
         console.log(`🌐 Server running at http://localhost:${port}`);
         console.log(`📄 Swagger Docs available at http://localhost:${port}/api-docs`);
         console.log(`🔌 WebSocket server initialized`);
+        
       });
     }
     else {

@@ -14,7 +14,7 @@ import file_routes from "./routes/file_routes";
 import cartRoutes from "./routes/cart";
 import wishlistRoutes from "./routes/wishlist";
 import chatRoutes from "./routes/chat";
-import { setupWebsockets, io } from "./services/websocket";
+//import { setupWebsockets, io } from "./services/websocket";
 import emailRoutes from "./routes/email_routes";
 
 import mapSupermarketsRoutes from "./routes/mapSupers";
@@ -52,12 +52,11 @@ app.use("/public", express.static("public"));
 app.use("/file", file_routes);
 app.use("/chat", chatRoutes)
 app.use("/", emailRoutes);
-
 app.use("/",mapSupermarketsRoutes);
 app.use("/wishlists", wishlistRoutes);
 
 
-app.use(express.static("front"));
+//app.use(express.static("front"));
 
 // Swagger setup
 const options = {
@@ -96,7 +95,7 @@ const initApp = async () => {
 
       // Only set up WebSockets here for non-production
       if (process.env.NODE_ENV !== "production") {
-        setupWebsockets(server);
+        //setupWebsockets(server);
       }
 
       // MongoDB connection options
@@ -147,5 +146,5 @@ const initApp = async () => {
   );
 };
 
-export { io };
+//export { io };
 export default initApp;

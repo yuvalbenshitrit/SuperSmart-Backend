@@ -1,6 +1,8 @@
 import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
+   host: "smtp.gmail.com",   
+  port: 465,       
   service: "gmail",
   auth: {
     user: "yuval056@gmail.com",
@@ -19,6 +21,10 @@ interface CartItem {
   storeName?: string;
   storeLocation?: string;
 }
+
+transporter.verify()
+  .then(() => console.log("✅ Email transporter verified"))
+  .catch((err) => console.error("❌ Verification failed", err));
 
 export async function sendCartEmail(email: string, cart: (string | CartItem)[]) {
   const subject = "🛒 העגלה שלך מהאפליקציה";
@@ -48,7 +54,7 @@ export async function sendCartEmail(email: string, cart: (string | CartItem)[]) 
   const body = "שלום! זאת העגלה ששמרת:\n\n" + itemTexts.join("\n");
 
   await transporter.sendMail({
-    from: "yuval056@gmail.com",
+    from: `"Smart Supermarket" <yuval056@gmail.com>`,
     to: email,
     subject,
     text: body,

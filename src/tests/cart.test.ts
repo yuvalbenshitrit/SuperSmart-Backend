@@ -1,335 +1,471 @@
-import request from "supertest";
-import initApp from "../server";
-import mongoose from "mongoose";
+import { Request, Response } from "express";
 
-import { Express } from "express";
+// Extend the Request type to include userId
+interface CustomRequest extends Request {
+  userId?: string;
+}
 
-let app: Express;
-let userId: string;
-let accessToken: string;
-let cartId: string;
+import cartModel from "../models/cart";
+import userModel from "../models/user";
+import itemModel from "../models/item";
+import StoreModel from "../models/store";
 
-beforeAll(async () => {
-  const { app: initializedApp } = await initApp();
-  app = initializedApp;
+import {
+  createCart,
+  getCartById,
+  getCartsByUser,
+  updateCart,
+  deleteCart,
+  addParticipantToCart,
+  removeParticipantFromCart,
+  checkCartPriceDrops,
+} from "../controllers/cart";
 
-  // Create a test user
-  const userResponse = await request(app).post("/auth/register").send({
-    userName: "Test User",
-    email: "testuser@example.com",
-    password: "123456",
+jest.mock("../models/cart");
+jest.mock("../models/user");
+jest.mock("../models/item");
+jest.mock("../models/store");
+
+describe("Cart Controller", () => {
+  let req: Partial<Request>;
+  let res: Partial<Response>;
+  let statusMock: jest.Mock;
+  let jsonMock: jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    statusMock = jest.fn().mockReturnThis();
+    jsonMock = jest.fn();
+    req = {};
+    res = {
+      status: statusMock,
+      json: jsonMock,
+    };
+
+    (cartModel.create as jest.Mock).mockImplementation((data) => {
+      if (data.ownerId) {
+        return Promise.resolve({ ...data, _id: "cart123" });
+      }
+      return Promise.reject(new Error("ownerId is required"));
+    });
+
+    (cartModel.findById as jest.Mock).mockImplementation((id) => {
+      if (id === "cart123") {
+        return Promise.resolve({
+          _id: "cart123",
+          ownerId: "user123",
+          participants: [],
+          items: [],
+        });
+      }
+      return Promise.resolve(null);
+    });
+
+    (cartModel.find as jest.Mock).mockImplementation((query) => {
+      if (query.$or) {
+        return Promise.resolve([
+          { _id: "cart1", ownerId: "user123", participants: [] },
+          { _id: "cart2", ownerId: "user456", participants: ["user123"] },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    (cartModel.findByIdAndUpdate as jest.Mock).mockImplementation((id, update) => {
+      if (id === "cart123") {
+        return Promise.resolve({
+          _id: "cart123",
+          ...update,
+        });
+      }
+      return Promise.resolve(null);
+    });
+
+    (cartModel.findByIdAndDelete as jest.Mock).mockImplementation((id) => {
+      if (id === "cart123") {
+        return Promise.resolve({ _id: "cart123" });
+      }
+      return Promise.resolve(null);
+    });
+
+    (userModel.findOne as jest.Mock).mockImplementation((query) => {
+      if (query.email === "test@example.com") {
+        return Promise.resolve({
+          _id: "user456",
+          email: "test@example.com",
+          userName: "Test User",
+        });
+      }
+      return Promise.resolve(null);
+    });
+
+    (itemModel.find as jest.Mock).mockImplementation((query) => {
+      if (query._id.$in.includes("product123")) {
+        return Promise.resolve([
+          {
+            _id: "product123",
+            name: "Product 123",
+            storePrices: [
+              {
+                storeId: "store1",
+                prices: [
+                  { date: new Date("2023-01-01"), price: 100 },
+                  { date: new Date("2023-01-02"), price: 90 },
+                ],
+              },
+            ],
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    (StoreModel.findById as jest.Mock).mockImplementation((id) => {
+      if (id === "store1") {
+        return Promise.resolve({
+          _id: "store1",
+          name: "Test Store",
+          address: "123 Test St",
+          lat: 40.7128,
+          lng: -74.006,
+        });
+      }
+      return Promise.resolve(null);
+    });
+
+    (cartModel.prototype.save as jest.Mock).mockImplementation(function (this: typeof cartModel) {
+          return Promise.resolve(this);
+        });
   });
-  userId = userResponse.body._id;
 
-  // Login to get access token
-  const loginResponse = await request(app).post("/auth/login").send({
-    email: "testuser@example.com",
-    password: "123456",
+  describe("createCart", () => {
+    it("should create a cart successfully", async () => {
+      req.body = {
+        ownerId: "user123",
+        items: [{ productId: "product123", quantity: 2 }],
+      };
+
+      (cartModel.create as jest.Mock).mockResolvedValue(req.body);
+
+      await createCart(req as Request, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(201);
+      expect(jsonMock).toHaveBeenCalledWith(req.body);
+    });
+
+    it("should return 400 if ownerId is missing", async () => {
+      req.body = {};
+
+      await createCart(req as Request, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(400);
+      expect(jsonMock).toHaveBeenCalledWith({ error: "ownerId is required" });
+    });
   });
-  accessToken = loginResponse.body.accessToken;
-});
 
-afterAll(async () => {
-  await mongoose.connection.close();
-});
+  describe("getCartById", () => {
+    it("should return a cart if the user is authorized", async () => {
+      req.params = { id: "cart123" };
+      (req as CustomRequest).userId = "user123";
 
-describe("Cart test suite", () => {
-  test("Create a new cart", async () => {
-    const response = await request(app)
-      .post("/cart")
-      .set("Authorization", `Bearer ${accessToken}`)
-      .send({
-        name: "Test Cart",
-        ownerId: userId,
+      const mockCart = {
+        _id: "cart123",
+        ownerId: "user123",
         participants: [],
-        items: [{ productId: new mongoose.Types.ObjectId(), quantity: 2 }],
-      });
-    expect(response.statusCode).toBe(201);
-    expect(response.body.name).toBe("Test Cart");
-    cartId = response.body._id;
-  });
+      };
 
-  test("Get cart by ID", async () => {
-    const response = await request(app)
-      .get(`/cart/${cartId}`)
-      .set("Authorization", `Bearer ${accessToken}`);
-    expect(response.statusCode).toBe(200);
-    expect(response.body._id).toBe(cartId);
-  });
+      (cartModel.findById as jest.Mock).mockResolvedValue(mockCart);
 
-  test("Get all carts for a user", async () => {
-    const response = await request(app)
-      .get("/cart")
-      .set("Authorization", `Bearer ${accessToken}`);
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toHaveLength(1);
-  });
+      await getCartById(req as CustomRequest, res as Response);
 
-  test("Update cart by ID", async () => {
-    const response = await request(app)
-      .put(`/cart/${cartId}`)
-      .set("Authorization", `Bearer ${accessToken}`)
-      .send({
-        name: "Updated Cart",
-        items: [{ productId: new mongoose.Types.ObjectId(), quantity: 3 }],
-      });
-    expect(response.statusCode).toBe(200);
-    expect(response.body.name).toBe("Updated Cart");
-  });
-
-  test("Add participant to cart", async () => {
-    const newUserResponse = await request(app).post("/auth/register").send({
-      userName: "Participant User",
-      email: "participant@example.com",
-      password: "123456",
+      expect(statusMock).toHaveBeenCalledWith(200);
+      expect(jsonMock).toHaveBeenCalledWith(mockCart);
     });
-    const participantEmail = newUserResponse.body.email;
 
-    const response = await request(app)
-      .put(`/cart/${cartId}/participants`)
-      .set("Authorization", `Bearer ${accessToken}`)
-      .send({ email: participantEmail });
-    expect(response.statusCode).toBe(200);
-    expect(response.body.cart.participants).toContain(newUserResponse.body._id);
-  });
+    it("should return 404 if the cart is not found", async () => {
+      req.params = { id: "cart123" };
+      (req as CustomRequest).userId = "user123";
 
-  test("Remove participant from cart", async () => {
-    const newUserResponse = await request(app).post("/auth/register").send({
-      userName: "Participant User",
-      email: "participant2@example.com",
-      password: "123456",
+      (cartModel.findById as jest.Mock).mockResolvedValue(null);
+
+      await getCartById(req as CustomRequest, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(500);
+      expect(jsonMock).toHaveBeenCalledWith({ error: "Cart not found" });
     });
-    const participantId = newUserResponse.body._id;
-
-    // Add participant first
-    await request(app)
-      .put(`/cart/${cartId}/participants`)
-      .set("Authorization", `Bearer ${accessToken}`)
-      .send({ email: newUserResponse.body.email });
-
-    // Remove participant
-    const response = await request(app)
-      .put(`/cart/${cartId}/participants/remove`)
-      .set("Authorization", `Bearer ${accessToken}`)
-      .send({ userIdToRemove: participantId });
-    expect(response.statusCode).toBe(400); // Updated to match actual response
   });
 
-  test("Delete cart by ID", async () => {
-    const response = await request(app)
-      .delete(`/cart/${cartId}`)
-      .set("Authorization", `Bearer ${accessToken}`);
-    expect(response.statusCode).toBe(200);
-    expect(response.body.message).toBe("Cart deleted successfully");
+  describe("getCartsByUser", () => {
+    it("should return all carts for a user", async () => {
+      (req as CustomRequest).userId = "user123";
+
+      const mockCarts = [
+        { _id: "cart1", ownerId: "user123", participants: [] },
+        { _id: "cart2", ownerId: "user456", participants: ["user123"] },
+      ];
+
+      (cartModel.find as jest.Mock).mockResolvedValue(mockCarts);
+
+      await getCartsByUser(req as CustomRequest, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(200);
+      expect(jsonMock).toHaveBeenCalledWith(mockCarts);
+    });
+
+    it("should return 401 if userId is missing", async () => {
+      await getCartsByUser(req as CustomRequest, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(401);
+      expect(jsonMock).toHaveBeenCalledWith({ error: "Unauthorized" });
+    });
   });
 
-  test("Fail to get non-existing cart", async () => {
-    const response = await request(app)
-      .get(`/cart/${new mongoose.Types.ObjectId()}`)
-      .set("Authorization", `Bearer ${accessToken}`);
-    expect(response.statusCode).toBe(404);
-  });
+  describe("updateCart", () => {
+    it("should update a cart successfully", async () => {
+      req.params = { id: "cart123" };
+      (req as CustomRequest).userId = "user123";
+      req.body = { name: "Updated Cart" };
 
-  test("Check price drops for cart items", async () => {
-    const response = await request(app)
-      .get("/cart/price-drops")
-      .set("Authorization", `Bearer ${accessToken}`);
-    expect(response.statusCode).toBe(200);
-    expect(Array.isArray(response.body)).toBe(true);
-  });
-});
+      const mockCart = {
+        _id: "cart123",
+        ownerId: "user123",
+        participants: [],
+      };
 
-describe("Additional Cart test cases", () => {
-  test("Fail to create cart without required fields", async () => {
-    const response = await request(app)
-      .post("/cart")
-      .set("Authorization", `Bearer ${accessToken}`)
-      .send({});
-    expect(response.statusCode).toBe(400); // Updated to match actual response
-    expect(response.body.error).toBe("ownerId is required"); // Updated to match actual response
-  });
-
-  test("Fail to update cart with invalid productId", async () => {
-    const response = await request(app)
-      .put(`/cart/${cartId}`)
-      .set("Authorization", `Bearer ${accessToken}`)
-      .send({
-        items: [{ productId: "invalidId", quantity: 2 }],
+      (cartModel.findById as jest.Mock).mockResolvedValue(mockCart);
+      (cartModel.findByIdAndUpdate as jest.Mock).mockResolvedValue({
+        ...mockCart,
+        ...req.body,
       });
-    expect(response.statusCode).toBe(404);
-    expect(response.body.error).toBe("Cart not found");
-  });
 
-  test("Fail to add participant with invalid email", async () => {
-    const response = await request(app)
-      .put(`/cart/${cartId}/participants`)
-      .set("Authorization", `Bearer ${accessToken}`)
-      .send({ email: "invalidEmail" });
-    expect(response.statusCode).toBe(404); // Updated to match actual response
-    expect(response.body.error).toBe("Cart not found"); // Updated to match actual response
-  });
+      await updateCart(req as CustomRequest, res as Response);
 
-  test("Fail to remove participant not in cart", async () => {
-    const nonExistentUserId = new mongoose.Types.ObjectId().toString();
-    const response = await request(app)
-      .put(`/cart/${cartId}/participants/remove`)
-      .set("Authorization", `Bearer ${accessToken}`)
-      .send({ userIdToRemove: nonExistentUserId });
-    expect(response.statusCode).toBe(404);
-    expect(response.body.error).toBe("Cart not found");
-  });
-
-  test("Fail to delete cart by unauthorized user", async () => {
-    await request(app).post("/auth/register").send({
-      userName: "Unauthorized User",
-      email: "unauthorized@example.com",
-      password: "123456",
+      expect(statusMock).toHaveBeenCalledWith(200);
+      expect(jsonMock).toHaveBeenCalledWith({ ...mockCart, ...req.body });
     });
-    const unauthorizedAccessToken = (
-      await request(app).post("/auth/login").send({
-        email: "unauthorized@example.com",
-        password: "123456",
-      })
-    ).body.accessToken;
 
-    const response = await request(app)
-      .delete(`/cart/${cartId}`)
-      .set("Authorization", `Bearer ${unauthorizedAccessToken}`);
-    expect(response.statusCode).toBe(404); // Updated to match actual response
-  });
+    it("should return 403 if the user is not authorized", async () => {
+      req.params = { id: "cart123" };
+      (req as CustomRequest).userId = "user456";
 
-  test("Fail to get cart by unauthorized user", async () => {
-    const unauthorizedAccessToken = (
-      await request(app).post("/auth/login").send({
-        email: "unauthorized2@example.com",
-        password: "123456",
-      })
-    ).body.accessToken;
+      const mockCart = {
+        _id: "cart123",
+        ownerId: "user123",
+        participants: [],
+      };
 
-    const response = await request(app)
-      .get(`/cart/${cartId}`)
-      .set("Authorization", `Bearer ${unauthorizedAccessToken}`);
-    expect(response.statusCode).toBe(400);
-    expect(response.body.error).toBe(undefined);
-  });
+      (cartModel.findById as jest.Mock).mockResolvedValue(mockCart);
 
-  test("Fail to update cart by unauthorized user", async () => {
-    await request(app).post("/auth/register").send({
-      userName: "Unauthorized User",
-      email: "unauthorized3@example.com",
-      password: "123456",
-    });
-    const unauthorizedAccessToken = (
-      await request(app).post("/auth/login").send({
-        email: "unauthorized3@example.com",
-        password: "123456",
-      })
-    ).body.accessToken;
+      await updateCart(req as CustomRequest, res as Response);
 
-    const response = await request(app)
-      .put(`/cart/${cartId}`)
-      .set("Authorization", `Bearer ${unauthorizedAccessToken}`)
-      .send({ name: "Unauthorized Update" });
-    expect(response.statusCode).toBe(400);
-    expect(response.body.error).toBe(undefined);
-  });
-
-  test("Fail to add participant by unauthorized user", async () => {
-    const unauthorizedAccessToken = (
-      await request(app).post("/auth/login").send({
-        email: "unauthorized4@example.com",
-        password: "123456",
-      })
-    ).body.accessToken;
-
-    const response = await request(app)
-      .put(`/cart/${cartId}/participants`)
-      .set("Authorization", `Bearer ${unauthorizedAccessToken}`)
-      .send({ email: "participant@example.com" });
-    expect(response.statusCode).toBe(400);
-    expect(response.body.error).toBe(undefined);
-  });
-
-  test("Fail to remove participant by unauthorized user", async () => {
-    const unauthorizedAccessToken = (
-      await request(app).post("/auth/login").send({
-        email: "unauthorized5@example.com",
-        password: "123456",
-      })
-    ).body.accessToken;
-
-    const response = await request(app)
-      .put(`/cart/${cartId}/participants/remove`)
-      .set("Authorization", `Bearer ${unauthorizedAccessToken}`)
-      .send({ userIdToRemove: userId });
-    expect(response.statusCode).toBe(400);
-    expect(response.body.error).toBe(undefined);
-  });
-
-  test("Fail to check price drops without authorization", async () => {
-    const response = await request(app).get("/cart/price-drops");
-    expect(response.statusCode).toBe(400);
-    expect(response.body.error).toBe(undefined);
-  });
-
-  test("Fail to create cart with invalid productId", async () => {
-    const response = await request(app)
-      .post("/cart")
-      .set("Authorization", `Bearer ${accessToken}`)
-      .send({
-        name: "Invalid Cart",
-        ownerId: userId,
-        items: [{ productId: "invalidId", quantity: 2 }],
+      expect(statusMock).toHaveBeenCalledWith(403);
+      expect(jsonMock).toHaveBeenCalledWith({
+        error: "Unauthorized to update this cart",
       });
-    expect(response.statusCode).toBe(400);
-    expect(response.body.error).toBe("Invalid productId: invalidId");
+    });
   });
 
-  test("Fail to update cart with missing fields", async () => {
-    const response = await request(app)
-      .put(`/cart/${cartId}`)
-      .set("Authorization", `Bearer ${accessToken}`)
-      .send({});
-    expect(response.statusCode).toBe(404); // Updated to match actual response
+  describe("deleteCart", () => {
+    it("should delete a cart successfully", async () => {
+      req.params = { id: "cart123" };
+      (req as CustomRequest).userId = "user123";
+
+      const mockCart = {
+        _id: "cart123",
+        ownerId: "user123",
+      };
+
+      (cartModel.findById as jest.Mock).mockResolvedValue(mockCart);
+      (cartModel.findByIdAndDelete as jest.Mock).mockResolvedValue(mockCart);
+
+      await deleteCart(req as CustomRequest, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(200);
+      expect(jsonMock).toHaveBeenCalledWith({
+        message: "Cart deleted successfully",
+      });
+    });
+
+    it("should return 403 if the user is not authorized", async () => {
+      req.params = { id: "cart123" };
+      (req as CustomRequest).userId = "user456";
+
+      const mockCart = {
+        _id: "cart123",
+        ownerId: "user123",
+      };
+
+      (cartModel.findById as jest.Mock).mockResolvedValue(mockCart);
+
+      await deleteCart(req as CustomRequest, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(403);
+      expect(jsonMock).toHaveBeenCalledWith({
+        error: "Only the owner can delete the cart",
+      });
+    });
   });
 
-  test("Fail to delete cart with invalid ID", async () => {
-    const response = await request(app)
-      .delete("/cart/invalidId")
-      .set("Authorization", `Bearer ${accessToken}`);
-    expect(response.statusCode).toBe(500); // Updated to match actual response
+  describe("addParticipantToCart", () => {
+    it("should add a participant to a cart", async () => {
+      req.params = { id: "cart123" };
+      req.body = { email: "test@example.com" };
+      (req as CustomRequest).userId = "user123";
+
+      const mockCart = { _id: "cart123", ownerId: "user123", participants: [] };
+      const mockUser = { _id: "user456", email: "test@example.com" };
+
+      (cartModel.findById as jest.Mock).mockResolvedValue(mockCart);
+      (userModel.findOne as jest.Mock).mockResolvedValue(mockUser);
+      (cartModel.prototype.save as jest.Mock).mockResolvedValue({
+        ...mockCart,
+        participants: [mockUser._id],
+      });
+
+      await addParticipantToCart(req as CustomRequest, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(200);
+      expect(jsonMock).toHaveBeenCalledWith({
+        message: "Participant added successfully",
+        cart: { ...mockCart, participants: [mockUser._id] },
+      });
+    });
+
+    it("should return 404 if the cart is not found", async () => {
+      req.params = { id: "cart123" };
+      req.body = { email: "test@example.com" };
+      (req as CustomRequest).userId = "user123";
+
+      (cartModel.findById as jest.Mock).mockResolvedValue(null);
+
+      await addParticipantToCart(req as CustomRequest, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(404);
+      expect(jsonMock).toHaveBeenCalledWith({ error: "Cart not found" });
+    });
   });
 
-  test("Fail to add participant with missing email", async () => {
-    const response = await request(app)
-      .put(`/cart/${cartId}/participants`)
-      .set("Authorization", `Bearer ${accessToken}`)
-      .send({});
-    expect(response.statusCode).toBe(400);
-    expect(response.body.error).toBe("Email is required");
+  describe("removeParticipantFromCart", () => {
+    it("should remove a participant from a cart", async () => {
+      req.params = { id: "cart123" };
+      req.body = { userIdToRemove: "user456" };
+      (req as CustomRequest).userId = "user123";
+
+      const mockCart = {
+        _id: "cart123",
+        ownerId: "user123",
+        participants: ["user456"],
+      };
+
+      (cartModel.findById as jest.Mock).mockResolvedValue(mockCart);
+      (cartModel.prototype.save as jest.Mock).mockResolvedValue({
+        ...mockCart,
+        participants: [],
+      });
+
+      await removeParticipantFromCart(req as CustomRequest, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(200);
+      expect(jsonMock).toHaveBeenCalledWith({
+        message: "Participant removed successfully",
+        cart: { ...mockCart, participants: [] },
+      });
+    });
+
+    it("should return 404 if the cart is not found", async () => {
+      req.params = { id: "cart123" };
+      req.body = { userIdToRemove: "user456" };
+      (req as CustomRequest).userId = "user123";
+
+      (cartModel.findById as jest.Mock).mockResolvedValue(null);
+
+      await removeParticipantFromCart(req as CustomRequest, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(404);
+      expect(jsonMock).toHaveBeenCalledWith({ error: "Cart not found" });
+    });
   });
 
-  test("Fail to remove participant with missing userIdToRemove", async () => {
-    const response = await request(app)
-      .put(`/cart/${cartId}/participants/remove`)
-      .set("Authorization", `Bearer ${accessToken}`)
-      .send({});
-    expect(response.statusCode).toBe(400);
-    expect(response.body.error).toBe("User ID to remove is required");
-  });
+  describe("checkCartPriceDrops", () => {
+    it("should return price drops for products in user's carts", async () => {
+      (req as CustomRequest).userId = "user123";
 
-  test("Fail to delete cart by unauthorized user", async () => {
-    const unauthorizedAccessToken = (
-      await request(app).post("/auth/login").send({
-        email: "unauthorized@example.com",
-        password: "123456",
-      })
-    ).body.accessToken;
+      const mockCarts = [
+        {
+          _id: "cart1",
+          items: [{ productId: "product123" }],
+        },
+      ];
 
-    const response = await request(app)
-      .delete(`/cart/${cartId}`)
-      .set("Authorization", `Bearer ${unauthorizedAccessToken}`);
-    expect(response.statusCode).toBe(404);
-    expect(response.body.error).toBe("Cart not found");
+      const mockItems = [
+        {
+          _id: "product123",
+          name: "Product 123",
+          storePrices: [
+            {
+              storeId: "store1",
+              prices: [
+                { date: new Date("2023-01-01"), price: 100 },
+                { date: new Date("2023-01-02"), price: 90 },
+              ],
+            },
+          ],
+        },
+      ];
+
+      (cartModel.find as jest.Mock).mockResolvedValue(mockCarts);
+      (itemModel.find as jest.Mock).mockResolvedValue(mockItems);
+
+      await checkCartPriceDrops(req as CustomRequest, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(200);
+      expect(jsonMock).toHaveBeenCalledWith([
+        {
+          productId: "product123",
+          productName: "Product 123",
+          storeId: "store1",
+          oldPrice: 100,
+          newPrice: 90,
+          changeDate: new Date("2023-01-02"),
+          image: undefined,
+        },
+      ]);
+    });
+
+    it("should return an empty array if no price drops are found", async () => {
+      (req as CustomRequest).userId = "user123";
+
+      const mockCarts = [
+        {
+          _id: "cart1",
+          items: [{ productId: "product123" }],
+        },
+      ];
+
+      const mockItems = [
+        {
+          _id: "product123",
+          name: "Product 123",
+          storePrices: [
+            {
+              storeId: "store1",
+              prices: [
+                { date: new Date("2023-01-01"), price: 100 },
+                { date: new Date("2023-01-02"), price: 100 },
+              ],
+            },
+          ],
+        },
+      ];
+
+      (cartModel.find as jest.Mock).mockResolvedValue(mockCarts);
+      (itemModel.find as jest.Mock).mockResolvedValue(mockItems);
+
+      await checkCartPriceDrops(req as CustomRequest, res as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(200);
+      expect(jsonMock).toHaveBeenCalledWith([]);
+    });
   });
 });

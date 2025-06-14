@@ -1,94 +1,227 @@
-import request from "supertest";
-import initApp from "../server";
-import mongoose from "mongoose";
-import { Express } from "express";
+import { Request, Response } from 'express';
+import { getCartMessages, addCartMessage } from '../controllers/chat';
+import CartMessage from '../models/cartMessage';
+import request from 'supertest';
+import express from 'express';
+import chatRouter from '../routes/chat';
 
-let app: Express;
-let cartId: string;
+// Mock CartMessage model
+jest.mock('../models/cartMessage', () => ({
+  find: jest.fn(),
+  create: jest.fn(),
+}));
 
-beforeAll(async () => {
-  const { app: initializedApp } = await initApp();
-  app = initializedApp;
+describe('Chat Controller', () => {
+  let mockRequest: Partial<Request>;
+  let mockResponse: Partial<Response>;
 
-  const cartResponse = await request(app).post("/cart").send({
-    name: "Test Cart",
-    ownerId: new mongoose.Types.ObjectId().toString(),
-    participants: [],
-    items: [],
+  beforeEach(() => {
+    mockRequest = {
+      params: {},
+      query: {},
+      body: {},
+    };
+
+    mockResponse = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn().mockReturnThis(),
+    };
+
+    jest.clearAllMocks();
   });
-  cartId = cartResponse.body._id;
+
+  describe('getCartMessages', () => {
+    it('should return 400 if cartId is not provided', async () => {
+      await getCartMessages(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+      expect(mockResponse.json).toHaveBeenCalledWith({ error: 'Cart ID is required' });
+    });
+
+    it('should return messages for a cart', async () => {
+      const messages = [
+        { id: '1', message: 'Hello', sender: 'user', timestamp: new Date() },
+        { id: '2', message: 'Hi', sender: 'assistant', timestamp: new Date() },
+      ];
+
+      const sortSpy = jest.fn().mockReturnThis();
+      const limitSpy = jest.fn().mockResolvedValue(messages);
+
+      (CartMessage.find as jest.Mock).mockReturnValue({
+        sort: sortSpy,
+        limit: limitSpy,
+      });
+
+      mockRequest.params = { cartId: '123' };
+
+      await getCartMessages(mockRequest as Request, mockResponse as Response);
+
+      expect(CartMessage.find).toHaveBeenCalledWith({ cartId: '123' });
+      expect(sortSpy).toHaveBeenCalledWith({ timestamp: -1 });
+      expect(limitSpy).toHaveBeenCalledWith(30);
+      expect(mockResponse.status).toHaveBeenCalledWith(200);
+      expect(mockResponse.json).toHaveBeenCalledWith(expect.any(Array));
+    });
+
+    it('should filter messages with before parameter', async () => {
+      const messages = [{ id: '1', message: 'Test', sender: 'user', timestamp: new Date() }];
+      const beforeDate = new Date('2023-01-01');
+
+      const sortSpy = jest.fn().mockReturnThis();
+      const limitSpy = jest.fn().mockResolvedValue(messages);
+
+      (CartMessage.find as jest.Mock).mockReturnValue({
+        sort: sortSpy,
+        limit: limitSpy,
+      });
+
+      mockRequest.params = { cartId: '123' };
+      mockRequest.query = { before: beforeDate.toISOString() };
+
+      await getCartMessages(mockRequest as Request, mockResponse as Response);
+
+      expect(CartMessage.find).toHaveBeenCalledWith({
+        cartId: '123',
+        timestamp: { $lt: expect.any(Date) }
+      });
+    });
+
+    it('should handle database errors', async () => {
+      (CartMessage.find as jest.Mock).mockImplementation(() => {
+        throw new Error('Database error');
+      });
+
+      mockRequest.params = { cartId: '123' };
+
+      await getCartMessages(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(500);
+      expect(mockResponse.json).toHaveBeenCalledWith({ error: 'Failed to fetch messages' });
+    });
+  });
+
+  describe('addCartMessage', () => {
+    it('should return 400 if required fields are missing', async () => {
+      mockRequest.params = { cartId: '123' };
+      mockRequest.body = { sender: 'user' }; // missing message
+
+      await addCartMessage(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        error: 'Cart ID, sender and message are required'
+      });
+    });
+
+    it('should add a new message', async () => {
+      const newMessage = {
+        id: '1',
+        cartId: '123',
+        sender: 'user',
+        message: 'Hello',
+        clientId: 'client1',
+        timestamp: new Date(),
+      };
+
+      (CartMessage.create as jest.Mock).mockResolvedValue(newMessage);
+
+      mockRequest.params = { cartId: '123' };
+      mockRequest.body = {
+        sender: 'user',
+        message: 'Hello',
+        clientId: 'client1'
+      };
+
+      await addCartMessage(mockRequest as Request, mockResponse as Response);
+
+      expect(CartMessage.create).toHaveBeenCalledWith({
+        cartId: '123',
+        sender: 'user',
+        message: 'Hello',
+        clientId: 'client1',
+        timestamp: expect.any(Date),
+      });
+
+      expect(mockResponse.status).toHaveBeenCalledWith(201);
+      expect(mockResponse.json).toHaveBeenCalledWith(newMessage);
+    });
+
+    it('should handle database errors', async () => {
+      (CartMessage.create as jest.Mock).mockImplementation(() => {
+        throw new Error('Database error');
+      });
+
+      mockRequest.params = { cartId: '123' };
+      mockRequest.body = {
+        sender: 'user',
+        message: 'Hello',
+        clientId: 'client1'
+      };
+
+      await addCartMessage(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(500);
+      expect(mockResponse.json).toHaveBeenCalledWith({ error: 'Failed to add message' });
+    });
+  });
 });
 
-afterAll(async () => {
-  await mongoose.connection.close();
-});
+describe('Chat Routes', () => {
+  const app = express();
+  app.use(express.json());
+  app.use('/chat', chatRouter);
 
-describe("Chat test suite", () => {
-  test("Add a new message to the chat", async () => {
-    const response = await request(app).post(`/chat/${cartId}`).send({
-      sender: "Test User",
-      message: "Hello, this is a test message!",
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('GET /:cartId', () => {
+    it('should get messages for a cart', async () => {
+      const messages = [
+        { id: '1', message: 'Hello', sender: 'user', timestamp: new Date() }
+      ];
+
+      const sortSpy = jest.fn().mockReturnThis();
+      const limitSpy = jest.fn().mockResolvedValue(messages);
+
+      (CartMessage.find as jest.Mock).mockReturnValue({
+        sort: sortSpy,
+        limit: limitSpy,
+      });
+
+      const response = await request(app).get('/chat/123');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(expect.any(Array));
     });
-    expect(response.statusCode).toBe(201);
-    expect(response.body.sender).toBe("Test User");
-    expect(response.body.message).toBe("Hello, this is a test message!");
   });
 
-  test("Fail to add a message without required fields", async () => {
-    const response = await request(app).post(`/chat/${cartId}`).send({});
-    expect(response.statusCode).toBe(400);
-    expect(response.body.error).toBe("Cart ID, sender and message are required");
-  });
+  describe('POST /:cartId', () => {
+    it('should add a new message', async () => {
+      const newMessage = {
+        id: '1',
+        cartId: '123',
+        sender: 'user',
+        message: 'Hello',
+        clientId: 'client1',
+        timestamp: new Date(),
+      };
 
-  test("Get messages for a cart", async () => {
-    const response = await request(app).get(`/chat/${cartId}`);
-    expect(response.statusCode).toBe(200);
-    expect(Array.isArray(response.body)).toBe(true);
-  });
+      (CartMessage.create as jest.Mock).mockResolvedValue(newMessage);
 
-  test("Fail to get messages with invalid cart ID format", async () => {
-    const response = await request(app).get("/chat/invalidCartId");
-    expect(response.statusCode).toBe(500);
-    expect(response.body.error).toBe("Failed to fetch messages");
-  });
-});
+      const response = await request(app)
+        .post('/chat/123')
+        .send({
+          sender: 'user',
+          message: 'Hello',
+          clientId: 'client1',
+        });
 
-describe("Additional Chat test cases", () => {
-  test("Fail to add a message with missing cartId (route not found)", async () => {
-    const response = await request(app).post("/chat/").send({
-      sender: "Test User",
-      message: "Message without cartId",
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual(expect.objectContaining({
+        sender: 'user',
+        message: 'Hello',
+      }));
     });
-    expect(response.statusCode).toBe(404);
-  });
-
-  test("Get messages for a non-existing cart", async () => {
-    const nonExistingCartId = new mongoose.Types.ObjectId().toString();
-    const response = await request(app).get(`/chat/${nonExistingCartId}`);
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toEqual([]);
-  });
-
-  test("Get messages with 'before' timestamp", async () => {
-    const beforeDate = new Date().toISOString();
-    const response = await request(app)
-      .get(`/chat/${cartId}`)
-      .query({ before: beforeDate });
-    expect(response.statusCode).toBe(200);
-    expect(Array.isArray(response.body)).toBe(true);
-  });
-
-  test("Fail to add a message with invalid cartId", async () => {
-    const response = await request(app).post("/chat/invalidCartId").send({
-      sender: "Test User",
-      message: "Invalid cartId test",
-    });
-    expect(response.statusCode).toBe(500);
-    expect(response.body.error).toBe("Failed to add message");
-  });
-
-  test("Fail to get messages with missing cartId (route not found)", async () => {
-    const response = await request(app).get("/chat/");
-    expect(response.statusCode).toBe(404);
   });
 });

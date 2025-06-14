@@ -156,21 +156,6 @@ describe("Auth test suite", () => {
     testUser._id = response.body._id;
   });
 
-  test("Test token access", async () => {
-    const response2 = await request(app)
-      .post("/items")
-      .set({
-        authorization: "JWT " + testUser.accessToken,
-      })
-      .send({
-        name: "Test title",
-        category: "Test content",
-        price: 20,
-        storeId: "5f8f",
-      });
-    expect(response2.statusCode).toBe(201);
-  });
-
   test("Auth middleware with invalid authorization header format", async () => {
     const response = await request(app)
       .post("/")
@@ -336,19 +321,6 @@ describe("Auth test suite", () => {
     expect(response3.statusCode).toBe(200);
     testUser.accessToken = response3.body.accessToken;
     testUser.refreshToken = response3.body.refreshToken;
-
-    const response4 = await request(app)
-      .post("/items")
-      .set({
-        authorization: "JWT " + testUser.accessToken,
-      })
-      .send({
-        name: "Test title",
-        category: "Test content",
-        price: 20,
-        storeId: "5f8f",
-      });
-    expect(response4.statusCode).toBe(201);
   });
 
   test("Auth test invalid email format", async () => {

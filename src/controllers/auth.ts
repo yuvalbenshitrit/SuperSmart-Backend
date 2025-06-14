@@ -372,7 +372,7 @@ const refresh = async (req: Request, res: Response) => {
   }
 };
 
-const updateCart = async (req: Request, res: Response) => {
+export const updateCart = async (req: Request, res: Response) => {
   try {
     const userId = req.params.id;
     const { productId, quantity } = req.body;
@@ -408,7 +408,7 @@ const updateCart = async (req: Request, res: Response) => {
   }
 };
 
-const deleteCartItem = async (req: Request, res: Response) => {
+export const deleteCartItem = async (req: Request, res: Response) => {
   try {
     const userId = req.params.id;
     const { productId } = req.body;

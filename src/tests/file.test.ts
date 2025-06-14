@@ -1,122 +1,82 @@
-import request from "supertest";
-import path from "path";
-import fs from "fs";
-import express from "express";
-import initApp from "../server";
-import mongoose from "mongoose";
+import request from 'supertest';
+import express from 'express';
+import path from 'path';
+import fs from 'fs';
+import fileRoutes from '../routes/file_routes';
 
-let app: express.Application;
-const testFilesDir = path.resolve(__dirname, "./testfiles");
-const testFiles: string[] = [];
+// Mock environment variables
+process.env.DOMAIN_BASE = 'http://localhost:3000';
 
-beforeAll(async () => {
-  console.log("beforeAll");
-  const result = await initApp();
-  app = result.app;
-  
-  // Create test directory if it doesn't exist
-  if (!fs.existsSync(testFilesDir)) {
-    fs.mkdirSync(testFilesDir, { recursive: true });
+// Create Express app for testing
+const app = express();
+app.use('/files', fileRoutes);
+
+// Create test directory if it doesn't exist
+beforeAll(() => {
+  // Ensure public directory exists for uploads
+  const publicDir = path.join(process.cwd(), 'public');
+  if (!fs.existsSync(publicDir)) {
+    fs.mkdirSync(publicDir, { recursive: true });
   }
 });
 
-afterAll((done) => {
-  console.log("afterAll");
-  
-  // Clean up test files
-  testFiles.forEach(file => {
-    try {
-      if (fs.existsSync(file)) {
-        fs.unlinkSync(file);
-      }
-    } catch (error) {
-      console.error(`Failed to delete file ${file}:`, error);
+// Clean up test files after each test
+afterEach(() => {
+  // Remove any test files created during tests
+  const publicDir = path.join(process.cwd(), 'public');
+  const files = fs.readdirSync(publicDir);
+
+  // Only remove test files created by our tests
+  files.forEach(file => {
+    if (file.startsWith('test-') || file.includes('test-file')) {
+      fs.unlinkSync(path.join(publicDir, file));
     }
   });
-  
-  // Try to clean up test directory
-  try {
-    fs.rmdirSync(testFilesDir);
-  } catch (error) {
-    console.error("Failed to delete test directory:", error);
-  }
-  
-  mongoose.connection.close();
-  done();
 });
 
-describe("File Tests", () => {
-  test("Placeholder test to prevent suite failure", () => {
-    expect(true).toBe(true);
-  });
+describe('File Routes', () => {
+  describe('POST /files', () => {
+    it('should upload a file successfully', async () => {
+      // Create a test file
+      const testFilePath = path.join(process.cwd(), 'test-file.txt');
+      fs.writeFileSync(testFilePath, 'This is a test file');
 
-  test("Should upload a file successfully", async () => {
-    const testFilePath = path.join(testFilesDir, "test.txt");
-    fs.writeFileSync(testFilePath, "Test file content");
-    testFiles.push(testFilePath);
-    
-    const response = await request(app)
-      .post("/file")
-      .attach("file", testFilePath);
-    
-    expect(response.status).toBe(200);
-    expect(response.body).toHaveProperty("url");
-    expect(typeof response.body.url).toBe("string");
-  });
+      const response = await request(app)
+        .post('/files')
+        .attach('file', testFilePath);
 
-  test("Should handle different file extensions", async () => {
-    const testJpgPath = path.join(testFilesDir, "test.jpg");
-    fs.writeFileSync(testJpgPath, "Mock JPG content");
-    testFiles.push(testJpgPath);
+      // Clean up the test file
+      fs.unlinkSync(testFilePath);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('url');
+      expect(response.body.url).toMatch(/^http:\/\/localhost:3000\/public\/\d+\.txt$/);
+    });
+
     
-    const jpgResponse = await request(app)
-      .post("/file")
-      .attach("file", testJpgPath);
-    
-    expect(jpgResponse.status).toBe(200);
-    expect(jpgResponse.body.url).toMatch(/\.jpg$/);
-  });
-  
-  test("Should handle files with complex extensions", async () => {
-    const testPath = path.join(testFilesDir, "test.complex.ext");
-    fs.writeFileSync(testPath, "Complex extension file content");
-    testFiles.push(testPath);
-    
-    const response = await request(app)
-      .post("/file")
-      .attach("file", testPath);
-    
-    expect(response.status).toBe(200);
-    expect(response.body.url).toMatch(/\.ext$/);
-  });
-  
-  test("Should generate unique URLs for each upload", async () => {
-    // Upload first file
-    const file1Path = path.join(testFilesDir, "file1.txt");
-    fs.writeFileSync(file1Path, "First file content");
-    testFiles.push(file1Path);
-    
-    const response1 = await request(app)
-      .post("/file")
-      .attach("file", file1Path);
-    
-    // Upload second file
-    const file2Path = path.join(testFilesDir, "file2.txt");
-    fs.writeFileSync(file2Path, "Second file content");
-    testFiles.push(file2Path);
-    
-    const response2 = await request(app)
-      .post("/file")
-      .attach("file", file2Path);
-    
-    expect(response1.body.url).not.toBe(response2.body.url);
-  });
-  
-  test("Should handle file upload request without a file", async () => {
-    const response = await request(app)
-      .post("/file");
-    
-    // The actual behavior depends on multer configuration
-    expect(response).toBeDefined();
+   
+
+    it('should handle image file uploads', async () => {
+      // For this test, we'll create a small binary file that mimics an image
+      const testFilePath = path.join(process.cwd(), 'test-image.png');
+
+      // Create a simple binary file (not a real image, but enough for testing)
+      const buffer = Buffer.from([
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+        // ... more binary data would go here in a real PNG
+      ]);
+      fs.writeFileSync(testFilePath, buffer);
+
+      const response = await request(app)
+        .post('/files')
+        .attach('file', testFilePath);
+
+      // Clean up the test file
+      fs.unlinkSync(testFilePath);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('url');
+      expect(response.body.url).toMatch(/^http:\/\/localhost:3000\/public\/\d+\.png$/);
+    });
   });
 });

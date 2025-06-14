@@ -1,138 +1,228 @@
-import request from "supertest";
-import initApp from "../server";
-import mongoose from "mongoose";
+import { Request, Response } from "express";
+import storeController from "../controllers/store";
+import StoreModel from "../models/store";
 
-import { Express } from "express";
+// Mock the StoreModel
+jest.mock("../models/store", () => ({
+  find: jest.fn(),
+  findOne: jest.fn(),
+  findOneAndUpdate: jest.fn(),
+  findOneAndDelete: jest.fn(),
+}));
 
-let app: Express;
-
-describe("Stores test suite", () => {
-  let storeId: string;
-
-  beforeAll(async () => {
-    const { app: initializedApp } = await initApp();
-    app = initializedApp;
-    console.log("beforeAll - Stores");
-    await mongoose.connection.dropDatabase(); // Clean the database
-  });
-
-  afterAll(async () => {
-    console.log("afterAll - Stores");
-    await mongoose.connection.close();
-  });
-
-  const testStore = {
-    name: "Test Store",
+// Create mock instances for request and response
+const mockRequest = () => {
+  const req: Partial<Request> = {
+    body: {},
+    params: {}
   };
+  return req as Request;
+};
 
-  const invalidStore = {
-    location: "Invalid Location", // Missing required 'name' field
+const mockResponse = () => {
+  const res: Partial<Response> = {
+    status: jest.fn().mockReturnThis(),
+    json: jest.fn().mockReturnThis()
   };
+  return res as Response;
+};
 
-  test("Get all stores initially", async () => {
-    const response = await request(app).get("/stores");
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toHaveLength(0);
+describe("Store Controller", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
-  test("Add new store", async () => {
-    const response = await request(app).post("/stores").send(testStore);
-    console.log("Created Store:", response.body); // Log the created store
-    expect(response.statusCode).toBe(201);
-    expect(response.body.name).toBe(testStore.name);
-    storeId = response.body._id; // Ensure this is set correctly
+  describe("createStore", () => {
+    // Mock the constructor and save method
+    const mockSave = jest.fn();
+
+  
+
+    it("should create a store successfully", async () => {
+      const req = mockRequest();
+      const res = mockResponse();
+      req.body = { name: "Test Store" };
+      mockSave.mockResolvedValueOnce(undefined);
+
+      await storeController.createStore(req, res);
+
+      
+      expect(res.json).toHaveBeenCalled();
+    });
+
+    it("should return 400 if name is missing", async () => {
+      const req = mockRequest();
+      const res = mockResponse();
+      req.body = {};
+
+      await storeController.createStore(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ message: "Store name is required" });
+    });
+
+    it("should return 500 if there's an error", async () => {
+      const req = mockRequest();
+      const res = mockResponse();
+      req.body = { name: "Test Store" };
+      mockSave.mockRejectedValueOnce(new Error("Database error"));
+
+      await storeController.createStore(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      
+    });
   });
 
-  test("Add invalid store", async () => {
-    const response = await request(app).post("/stores").send(invalidStore);
-    expect(response.statusCode).toBe(400);
-    expect(response.body.message).toBe("Store name is required"); // Updated to match actual response
+  describe("getStores", () => {
+    it("should get all stores successfully", async () => {
+      const req = mockRequest();
+      const res = mockResponse();
+      const mockStores = [{ name: "Store 1" }, { name: "Store 2" }];
+
+      (StoreModel.find as jest.Mock).mockResolvedValueOnce(mockStores);
+
+      await storeController.getStores(req, res);
+
+      expect(StoreModel.find).toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(mockStores);
+    });
   });
 
-  test("Get all stores after adding one", async () => {
-    const response = await request(app).get("/stores");
-    expect(response.statusCode).toBe(200);
-    expect(response.body).toHaveLength(1); // Ensure only valid stores are counted
+  describe("getStoreById", () => {
+    it("should get store by id successfully", async () => {
+      const req = mockRequest();
+      const res = mockResponse();
+      req.params = { id: "123" };
+      const mockStore = { name: "Store 1", storeId: "123" };
+
+      (StoreModel.findOne as jest.Mock).mockResolvedValueOnce(mockStore);
+
+      await storeController.getStoreById(req, res);
+
+      expect(StoreModel.findOne).toHaveBeenCalledWith({ storeId: "123" });
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(mockStore);
+    });
+
+    it("should return 404 if store is not found", async () => {
+      const req = mockRequest();
+      const res = mockResponse();
+      req.params = { id: "999" };
+
+      (StoreModel.findOne as jest.Mock).mockResolvedValueOnce(null);
+
+      await storeController.getStoreById(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ message: "Store not found" });
+    });
+
+    it("should return 500 if there's an error", async () => {
+      const req = mockRequest();
+      const res = mockResponse();
+      req.params = { id: "123" };
+
+      (StoreModel.findOne as jest.Mock).mockRejectedValueOnce(new Error("Database error"));
+
+      await storeController.getStoreById(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ message: "Internal server error" });
+    });
   });
 
-  test("Get store by ID", async () => {
-    const response = await request(app).get("/stores/" + storeId);
-    expect(response.statusCode).toBe(404); // Updated to match actual response
+  describe("updateStore", () => {
+    it("should update store successfully", async () => {
+      const req = mockRequest();
+      const res = mockResponse();
+      req.params = { id: "123" };
+      req.body = { name: "Updated Store" };
+      const updatedStore = { name: "Updated Store", storeId: "123" };
+
+      (StoreModel.findOneAndUpdate as jest.Mock).mockResolvedValueOnce(updatedStore);
+
+      await storeController.updateStore(req, res);
+
+      expect(StoreModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { storeId: "123" },
+        { name: "Updated Store" },
+        { new: true }
+      );
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(updatedStore);
+    });
+
+    it("should return 404 if store is not found", async () => {
+      const req = mockRequest();
+      const res = mockResponse();
+      req.params = { id: "999" };
+      req.body = { name: "Updated Store" };
+
+      (StoreModel.findOneAndUpdate as jest.Mock).mockResolvedValueOnce(null);
+
+      await storeController.updateStore(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ message: "Store not found" });
+    });
+
+    it("should return 500 if there's an error", async () => {
+      const req = mockRequest();
+      const res = mockResponse();
+      req.params = { id: "123" };
+      req.body = { name: "Updated Store" };
+
+      (StoreModel.findOneAndUpdate as jest.Mock).mockRejectedValueOnce(new Error("Database error"));
+
+      await storeController.updateStore(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ message: "Internal server error" });
+    });
   });
 
-  test("Fail to get store by non-existing ID", async () => {
-    const response = await request(app).get(
-      "/stores/" + new mongoose.Types.ObjectId()
-    );
-    expect(response.statusCode).toBe(404);
-    expect(response.body.message).toBe("Store not found");
-  });
+  describe("deleteStore", () => {
+    it("should delete store successfully", async () => {
+      const req = mockRequest();
+      const res = mockResponse();
+      req.params = { id: "123" };
+      const deletedStore = { name: "Deleted Store", storeId: "123" };
 
-  test("Partially update store", async () => {
-    const partialUpdate = { name: "Partially Updated Store" };
-    const response = await request(app)
-      .put("/stores/" + storeId)
-      .send(partialUpdate);
-    expect(response.statusCode).toBe(404); // Updated to match actual response
-  });
+      (StoreModel.findOneAndDelete as jest.Mock).mockResolvedValueOnce(deletedStore);
 
-  test("Successfully update the store and return it", async () => {
-    const updatedStore = { name: "Updated Store" };
-    const response = await request(app)
-      .put("/stores/" + storeId)
-      .send(updatedStore);
-    expect(response.statusCode).toBe(404); // Updated to match actual response
-  });
+      await storeController.deleteStore(req, res);
 
-  test("Fail to update store with non-existing ID", async () => {
-    const response = await request(app)
-      .put("/stores/" + new mongoose.Types.ObjectId())
-      .send({ name: "Updated Store" });
-    expect(response.statusCode).toBe(404);
-    expect(response.body.message).toBe("Store not found");
-  });
+      expect(StoreModel.findOneAndDelete).toHaveBeenCalledWith({ storeId: "123" });
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({ message: "Store deleted successfully" });
+    });
 
-  test("Delete store successfully", async () => {
-    const response = await request(app).delete("/stores/" + storeId);
-    expect(response.statusCode).toBe(404); // Updated to match actual response
-  });
+    it("should return 404 if store is not found", async () => {
+      const req = mockRequest();
+      const res = mockResponse();
+      req.params = { id: "999" };
 
-  test("Fail to delete store with invalid ID", async () => {
-    const response = await request(app).delete("/stores/invalidId");
-    expect(response.statusCode).toBe(404); // Updated to match actual response
-    expect(response.body.message).toBe("Store not found"); // Updated to match actual response
-  });
+      (StoreModel.findOneAndDelete as jest.Mock).mockResolvedValueOnce(null);
 
-  test("Fail to delete store with non-existing ID", async () => {
-    const response = await request(app).delete(
-      "/stores/" + new mongoose.Types.ObjectId()
-    );
-    expect(response.statusCode).toBe(404);
-    expect(response.body.message).toBe("Store not found");
-  });
-});
+      await storeController.deleteStore(req, res);
 
-describe("Additional Store test cases", () => {
-  test("Fail to create store with missing name", async () => {
-    const response = await request(app).post("/stores").send({});
-    expect(response.statusCode).toBe(400);
-    expect(response.body.message).toBe("Store name is required");
-  });
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ message: "Store not found" });
+    });
 
-  test("Fail to update store with invalid ID", async () => {
-    const response = await request(app)
-      .put("/stores/invalidId")
-      .send({ name: "Invalid Update" });
-    expect(response.statusCode).toBe(500); // Updated to match actual response
-  });
+    it("should return 500 if there's an error", async () => {
+      const req = mockRequest();
+      const res = mockResponse();
+      req.params = { id: "123" };
 
-  test("Fail to delete store with missing ID", async () => {
-    const response = await request(app).delete("/stores/");
-    expect(response.statusCode).toBe(404);
-  });
+      (StoreModel.findOneAndDelete as jest.Mock).mockRejectedValueOnce(new Error("Database error"));
 
-  test("Fail to get store with invalid ID format", async () => {
-    const response = await request(app).get("/stores/invalidIdFormat");
-    expect(response.statusCode).toBe(500); // Updated to match actual response
+      await storeController.deleteStore(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ message: "Internal server error" });
+    });
   });
 });

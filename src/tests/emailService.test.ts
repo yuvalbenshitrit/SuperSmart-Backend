@@ -1,149 +1,94 @@
-import nodemailer from 'nodemailer';
 import { sendCartEmail } from '../services/emailService';
+import nodemailer from 'nodemailer';
 
 // Mock nodemailer
 jest.mock('nodemailer', () => ({
     createTransport: jest.fn().mockReturnValue({
-        sendMail: jest.fn().mockImplementation((mailOptions) => Promise.resolve(mailOptions))
-    })
+        verify: jest.fn().mockResolvedValue(true),
+        sendMail: jest.fn().mockImplementation(() => Promise.resolve({ response: '250 Message sent' })),
+    }),
 }));
 
 describe('Email Service', () => {
-    const mockTransporter = nodemailer.createTransport();
-    
+    let sendMailMock: jest.Mock;
+
     beforeEach(() => {
-        jest.clearAllMocks();
+        // Reset and setup the sendMail mock before each test
+        sendMailMock = nodemailer.createTransport().sendMail as jest.Mock;
+        sendMailMock.mockClear();
     });
 
-    it('should send email with string items', async () => {
+    it('should send email with empty cart', async () => {
         const email = 'test@example.com';
-        const cart = ['Apple', 'Banana', 'Orange'];
-        
-        await sendCartEmail(email, cart);
-        
-        expect(mockTransporter.sendMail).toHaveBeenCalledTimes(1);
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith({
-            from: 'yuval056@gmail.com',
-            to: email,
-            subject: '🛒 העגלה שלך מהאפליקציה',
-            text: expect.stringContaining('- Apple\n- Banana\n- Orange')
-        });
+        await sendCartEmail(email, []);
+
+        expect(sendMailMock).toHaveBeenCalledTimes(1);
+        expect(sendMailMock.mock.calls[0][0].to).toBe(email);
+        expect(sendMailMock.mock.calls[0][0].text).toContain('שלום! זאת העגלה ששמרת:');
     });
 
-    it('should send email with object items using name property', async () => {
+    it('should send email with string cart items', async () => {
         const email = 'test@example.com';
-        const cart = [
-            { name: 'Apple', quantity: 2, price: 5.99, store: 'FruitStore', storeLocation: 'Center' }
-        ];
-        
+        const cart = ['חלב', 'לחם', 'ביצים'];
+
         await sendCartEmail(email, cart);
-        
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith({
-            from: 'yuval056@gmail.com',
-            to: email,
-            subject: '🛒 העגלה שלך מהאפליקציה',
-            text: expect.stringContaining('- Apple (כמות: 2) - ₪5.99 [FruitStore - Center]')
-        });
+
+        expect(sendMailMock).toHaveBeenCalledTimes(1);
+        expect(sendMailMock.mock.calls[0][0].to).toBe(email);
+        expect(sendMailMock.mock.calls[0][0].text).toContain('- חלב');
+        expect(sendMailMock.mock.calls[0][0].text).toContain('- לחם');
+        expect(sendMailMock.mock.calls[0][0].text).toContain('- ביצים');
     });
 
-    it('should send email with object items using productName when name is not available', async () => {
+    it('should send email with object cart items', async () => {
         const email = 'test@example.com';
         const cart = [
-            { productName: 'Apple', quantity: 2, price: 5.99 }
+            { name: 'חלב', quantity: 2, price: 5.90, store: 'שופרסל', storeLocation: 'קריית אונו' },
+            { productName: 'לחם', quantity: 1, price: 7.50 },
+            { title: 'ביצים', price: 12.90, storeName: 'רמי לוי' }
         ];
-        
+
         await sendCartEmail(email, cart);
-        
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith({
-            from: 'yuval056@gmail.com',
-            to: email,
-            subject: '🛒 העגלה שלך מהאפליקציה',
-            text: expect.stringContaining('- Apple (כמות: 2) - ₪5.99')
-        });
+
+        expect(sendMailMock).toHaveBeenCalledTimes(1);
+        expect(sendMailMock.mock.calls[0][0].to).toBe(email);
+        expect(sendMailMock.mock.calls[0][0].text).toContain('- חלב (כמות: 2) - ₪5.9 [שופרסל - קריית אונו]');
+        expect(sendMailMock.mock.calls[0][0].text).toContain('- לחם (כמות: 1) - ₪7.5');
+        expect(sendMailMock.mock.calls[0][0].text).toContain('- ביצים - ₪12.9 [רמי לוי]');
     });
 
-    it('should send email with object items using title when name and productName are not available', async () => {
+    it('should send email with mixed string and object cart items', async () => {
         const email = 'test@example.com';
         const cart = [
-            { title: 'Apple', price: 5.99 }
+            'שוקולד',
+            { name: 'חלב', quantity: 2, price: 5.90 },
+            'גבינה'
         ];
-        
+
         await sendCartEmail(email, cart);
-        
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith({
-            from: 'yuval056@gmail.com',
-            to: email,
-            subject: '🛒 העגלה שלך מהאפליקציה',
-            text: expect.stringContaining('- Apple - ₪5.99')
-        });
+
+        expect(sendMailMock).toHaveBeenCalledTimes(1);
+        expect(sendMailMock.mock.calls[0][0].to).toBe(email);
+        expect(sendMailMock.mock.calls[0][0].text).toContain('- שוקולד');
+        expect(sendMailMock.mock.calls[0][0].text).toContain('- חלב (כמות: 2) - ₪5.9');
+        expect(sendMailMock.mock.calls[0][0].text).toContain('- גבינה');
     });
 
-    it('should use default "פריט" when no name properties are available', async () => {
+    it('should use fallback name when no name is provided in object', async () => {
         const email = 'test@example.com';
-        const cart = [
-            { price: 5.99 }
-        ];
-        
+        const cart = [{ quantity: 3, price: 10 }];
+
         await sendCartEmail(email, cart);
-        
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith({
-            from: 'yuval056@gmail.com',
-            to: email,
-            subject: '🛒 העגלה שלך מהאפליקציה',
-            text: expect.stringContaining('- פריט - ₪5.99')
-        });
+
+        expect(sendMailMock).toHaveBeenCalledTimes(1);
+        expect(sendMailMock.mock.calls[0][0].text).toContain('- פריט (כמות: 3) - ₪10');
     });
 
-    it('should use storeName when store is not available', async () => {
-        const email = 'test@example.com';
-        const cart = [
-            { name: 'Apple', storeName: 'SuperMarket' }
-        ];
-        
-        await sendCartEmail(email, cart);
-        
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith({
-            from: 'yuval056@gmail.com',
-            to: email,
-            subject: '🛒 העגלה שלך מהאפליקציה',
-            text: expect.stringContaining('- Apple [SuperMarket]')
-        });
-    });
+    it('should handle error when sending email fails', async () => {
+        sendMailMock.mockRejectedValueOnce(new Error('Failed to send email'));
 
-    it('should handle mixed string and object items', async () => {
         const email = 'test@example.com';
-        const cart = [
-            'Simple item',
-            { name: 'Complex item', quantity: 3, price: 10.50 }
-        ];
-        
-        await sendCartEmail(email, cart);
-        
-        const sentEmail = (mockTransporter.sendMail as jest.Mock).mock.calls[0][0];
-        expect(sentEmail.text).toContain('- Simple item');
-        expect(sentEmail.text).toContain('- Complex item (כמות: 3) - ₪10.5');
-    });
 
-    it('should handle empty cart arrays', async () => {
-        const email = 'test@example.com';
-        const cart: (string | { 
-            name?: string;
-            productName?: string;
-            title?: string;
-            quantity?: number;
-            price?: number;
-            store?: string;
-            storeName?: string;
-            storeLocation?: string;
-        })[] = [];
-        
-        await sendCartEmail(email, cart);
-        
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith({
-            from: 'yuval056@gmail.com',
-            to: email,
-            subject: '🛒 העגלה שלך מהאפליקציה',
-            text: 'שלום! זאת העגלה ששמרת:\n\n'
-        });
+        await expect(sendCartEmail(email, ['item'])).rejects.toThrow('Failed to send email');
     });
 });

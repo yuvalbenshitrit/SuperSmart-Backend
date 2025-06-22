@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import storeController from "../controllers/store";
 import StoreModel from "../models/store";
 
-// Mock the StoreModel
+
 jest.mock("../models/store", () => ({
   find: jest.fn(),
   findOne: jest.fn(),
@@ -10,7 +10,7 @@ jest.mock("../models/store", () => ({
   findOneAndDelete: jest.fn(),
 }));
 
-// Create mock instances for request and response
+
 const mockRequest = () => {
   const req: Partial<Request> = {
     body: {},
@@ -33,7 +33,7 @@ describe("Store Controller", () => {
   });
 
   describe("createStore", () => {
-    // Mock the constructor and save method
+  
     const mockSave = jest.fn();
 
   
@@ -180,49 +180,49 @@ describe("Store Controller", () => {
 
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({ message: "Internal server error" });
-    });
-  });
+        });
+        
+        describe("deleteStore", () => {
+          it("should delete store successfully", async () => {
+            const req = mockRequest();
+            const res = mockResponse();
+            req.params = { id: "123" };
+            const deletedStore = { name: "Deleted Store", storeId: "123" };
 
-  describe("deleteStore", () => {
-    it("should delete store successfully", async () => {
-      const req = mockRequest();
-      const res = mockResponse();
-      req.params = { id: "123" };
-      const deletedStore = { name: "Deleted Store", storeId: "123" };
+            (StoreModel.findOneAndDelete as jest.Mock).mockResolvedValueOnce(deletedStore);
 
-      (StoreModel.findOneAndDelete as jest.Mock).mockResolvedValueOnce(deletedStore);
+            await storeController.deleteStore(req, res);
 
-      await storeController.deleteStore(req, res);
+            expect(StoreModel.findOneAndDelete).toHaveBeenCalledWith({ storeId: "123" });
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({ message: "Store deleted successfully" });
+          });
 
-      expect(StoreModel.findOneAndDelete).toHaveBeenCalledWith({ storeId: "123" });
-      expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith({ message: "Store deleted successfully" });
-    });
+          it("should return 404 if store is not found", async () => {
+            const req = mockRequest();
+            const res = mockResponse();
+            req.params = { id: "999" };
 
-    it("should return 404 if store is not found", async () => {
-      const req = mockRequest();
-      const res = mockResponse();
-      req.params = { id: "999" };
+            (StoreModel.findOneAndDelete as jest.Mock).mockResolvedValueOnce(null);
 
-      (StoreModel.findOneAndDelete as jest.Mock).mockResolvedValueOnce(null);
+            await storeController.deleteStore(req, res);
 
-      await storeController.deleteStore(req, res);
+            expect(res.status).toHaveBeenCalledWith(404);
+            expect(res.json).toHaveBeenCalledWith({ message: "Store not found" });
+          });
 
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ message: "Store not found" });
-    });
+          it("should return 500 if there's an error", async () => {
+            const req = mockRequest();
+            const res = mockResponse();
+            req.params = { id: "123" };
 
-    it("should return 500 if there's an error", async () => {
-      const req = mockRequest();
-      const res = mockResponse();
-      req.params = { id: "123" };
+            (StoreModel.findOneAndDelete as jest.Mock).mockRejectedValueOnce(new Error("Database error"));
 
-      (StoreModel.findOneAndDelete as jest.Mock).mockRejectedValueOnce(new Error("Database error"));
+            await storeController.deleteStore(req, res);
 
-      await storeController.deleteStore(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ message: "Internal server error" });
-    });
+            expect(res.status).toHaveBeenCalledWith(500);
+            expect(res.json).toHaveBeenCalledWith({ message: "Internal server error" });
+          });
+        });
   });
 });

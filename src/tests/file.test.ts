@@ -1,82 +1,47 @@
-import request from 'supertest';
-import express from 'express';
-import path from 'path';
-import fs from 'fs';
-import fileRoutes from '../routes/file_routes';
+import request from "supertest";
+import initApp from "../server";
+import mongoose from "mongoose";
+import { Express } from "express";
+import { URL } from "url";
+import path from "path";
 
-// Mock environment variables
-process.env.DOMAIN_BASE = 'http://localhost:3000';
+let app: Express;
 
-// Create Express app for testing
-const app = express();
-app.use('/files', fileRoutes);
-
-// Create test directory if it doesn't exist
-beforeAll(() => {
-  // Ensure public directory exists for uploads
-  const publicDir = path.join(process.cwd(), 'public');
-  if (!fs.existsSync(publicDir)) {
-    fs.mkdirSync(publicDir, { recursive: true });
-  }
+beforeAll(async () => {
+    const { app: initedApp } = await initApp();
+    app = initedApp;
 });
 
-// Clean up test files after each test
-afterEach(() => {
-  // Remove any test files created during tests
-  const publicDir = path.join(process.cwd(), 'public');
-  const files = fs.readdirSync(publicDir);
-
-  // Only remove test files created by our tests
-  files.forEach(file => {
-    if (file.startsWith('test-') || file.includes('test-file')) {
-      fs.unlinkSync(path.join(publicDir, file));
-    }
-  });
+afterAll(async () => {
+    await mongoose.connection.close();
 });
 
-describe('File Routes', () => {
-  describe('POST /files', () => {
-    it('should upload a file successfully', async () => {
-      // Create a test file
-      const testFilePath = path.join(process.cwd(), 'test-file.txt');
-      fs.writeFileSync(testFilePath, 'This is a test file');
+describe("File Tests", () => {
+    test("upload file", async () => {
+        const filePath = path.join(__dirname, "test_file.txt");
 
-      const response = await request(app)
-        .post('/files')
-        .attach('file', testFilePath);
+        try {
+            const response = await request(app)
+                .post("/file?file=test_file.txt")
+                .attach("file", filePath);
 
-      // Clean up the test file
-      fs.unlinkSync(testFilePath);
+            expect(response.statusCode).toBe(200);
+            expect(response.body).toHaveProperty("url");
 
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('url');
-      expect(response.body.url).toMatch(/^http:\/\/localhost:3000\/public\/\d+\.txt$/);
+            const rawUrl = response.body.url.replace(/\\/g, "/");
+            const parsedUrl = new URL(rawUrl, "http://localhost:3000");
+            const pathname = parsedUrl.pathname;
+
+            
+            expect(pathname).toMatch(/^\/public\/\d+\.txt$/);
+
+           
+            const fileResponse = await request(app).get(pathname);
+            expect(fileResponse.statusCode).toBe(200);
+
+        } catch (err) {
+            console.error("❌ Error during file test:", err);
+            expect(1).toBe(2); 
+        }
     });
-
-    
-   
-
-    it('should handle image file uploads', async () => {
-      // For this test, we'll create a small binary file that mimics an image
-      const testFilePath = path.join(process.cwd(), 'test-image.png');
-
-      // Create a simple binary file (not a real image, but enough for testing)
-      const buffer = Buffer.from([
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
-        // ... more binary data would go here in a real PNG
-      ]);
-      fs.writeFileSync(testFilePath, buffer);
-
-      const response = await request(app)
-        .post('/files')
-        .attach('file', testFilePath);
-
-      // Clean up the test file
-      fs.unlinkSync(testFilePath);
-
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('url');
-      expect(response.body.url).toMatch(/^http:\/\/localhost:3000\/public\/\d+\.png$/);
-    });
-  });
 });

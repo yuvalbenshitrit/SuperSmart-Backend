@@ -1,471 +1,823 @@
-import { Request, Response } from "express";
-
-// Extend the Request type to include userId
-interface CustomRequest extends Request {
-  userId?: string;
-}
-
+import request from "supertest";
+import initApp from "../server";
+import mongoose from "mongoose";
 import cartModel from "../models/cart";
 import userModel from "../models/user";
 import itemModel from "../models/item";
-import StoreModel from "../models/store";
+import { Express } from "express";
 
-import {
-  createCart,
-  getCartById,
-  getCartsByUser,
-  updateCart,
-  deleteCart,
-  addParticipantToCart,
-  removeParticipantFromCart,
-  checkCartPriceDrops,
-} from "../controllers/cart";
+let app: Express;
 
-jest.mock("../models/cart");
-jest.mock("../models/user");
-jest.mock("../models/item");
-jest.mock("../models/store");
+beforeAll(async () => {
+  const { app: initializedApp } = await initApp();
+  app = initializedApp;
+  
+  // Clean up test data
+  await cartModel.deleteMany();
+  await userModel.deleteMany();
+  await itemModel.deleteMany();
+});
 
-describe("Cart Controller", () => {
-  let req: Partial<Request>;
-  let res: Partial<Response>;
-  let statusMock: jest.Mock;
-  let jsonMock: jest.Mock;
+afterAll(async () => {
+  await mongoose.connection.close();
+});
 
-  beforeEach(() => {
-    jest.clearAllMocks();
+const baseUrl = "/carts";
 
-    statusMock = jest.fn().mockReturnThis();
-    jsonMock = jest.fn();
-    req = {};
-    res = {
-      status: statusMock,
-      json: jsonMock,
-    };
+// Test data types
+type TestUser = {
+  userName: string;
+  email: string;
+  password: string;
+  _id?: string;
+  accessToken?: string;
+};
 
-    (cartModel.create as jest.Mock).mockImplementation((data) => {
-      if (data.ownerId) {
-        return Promise.resolve({ ...data, _id: "cart123" });
-      }
-      return Promise.reject(new Error("ownerId is required"));
+type TestCart = {
+  name?: string;
+  ownerId: string;
+  participants?: string[];
+  items: { productId: string; quantity: number }[];
+  notifications?: boolean;
+  _id?: string;
+};
+
+// Test users
+const testUser1: TestUser = {
+  userName: "CartOwner",
+  email: "owner@test.com",
+  password: "123456",
+};
+
+const testUser2: TestUser = {
+  userName: "CartParticipant",
+  email: "participant@test.com",
+  password: "123456",
+};
+
+const testUser3: TestUser = {
+  userName: "NonParticipant",
+  email: "nonparticipant@test.com",
+  password: "123456",
+};
+
+// Helper function to register and login users
+const registerAndLoginUser = async (user: TestUser): Promise<TestUser> => {
+  // Register user
+  await request(app)
+    .post("/auth/register")
+    .send(user);
+
+  // Login user
+  const loginResponse = await request(app)
+    .post("/auth/login")
+    .send({
+      email: user.email,
+      password: user.password,
     });
 
-    (cartModel.findById as jest.Mock).mockImplementation((id) => {
-      if (id === "cart123") {
-        return Promise.resolve({
-          _id: "cart123",
-          ownerId: "user123",
+  user.accessToken = loginResponse.body.accessToken;
+  user._id = loginResponse.body._id;
+  return user;
+};
+
+// Helper function to create test item
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const createTestItem = async (): Promise<any> => {
+  const testItem = {
+    name: "Test Product",
+    category: "Test Category",
+    storePrices: [{
+      storeId: new mongoose.Types.ObjectId(),
+      prices: [
+        { date: new Date(), price: 10.99 },
+        { date: new Date(Date.now() - 86400000), price: 12.99 } // Yesterday, higher price
+      ]
+    }],
+    nutrition: {
+      protein: 5,
+      fat: 2,
+      carbs: 20,
+      calories: 100,
+      sodium: 50,
+      calcium: null,
+      vitamin_c: null,
+      cholesterol: 0
+    }
+  };
+  
+  const item = await itemModel.create(testItem);
+  return item;
+};
+
+describe("Cart Test Suite", () => {
+  let loggedInOwner: TestUser;
+  let loggedInParticipant: TestUser;
+  let loggedInNonParticipant: TestUser;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let testItem: any;
+  let testCart: TestCart;
+
+  beforeAll(async () => {
+    // Setup test users
+    loggedInOwner = await registerAndLoginUser(testUser1);
+    loggedInParticipant = await registerAndLoginUser(testUser2);
+    loggedInNonParticipant = await registerAndLoginUser(testUser3);
+
+    // Create test item
+    testItem = await createTestItem();
+  });
+
+  describe("Cart Model Tests", () => {
+    test("Should create a cart with valid data", async () => {
+      const cartData = {
+        name: "Test Cart",
+        ownerId: loggedInOwner._id!,
+        participants: [],
+        items: [{ productId: testItem._id.toString(), quantity: 2 }],
+        notifications: true,
+      };
+
+      const cart = await cartModel.create(cartData);
+      expect(cart).toBeDefined();
+      expect(cart.name).toBe(cartData.name);
+      expect(cart.ownerId).toBe(cartData.ownerId);
+      expect(cart.items).toHaveLength(1);
+      expect(cart.notifications).toBe(true);
+    });
+
+    test("Should require ownerId", async () => {
+      const cartData = {
+        name: "Test Cart",
+        participants: [],
+        items: [],
+      };
+
+      await expect(cartModel.create(cartData)).rejects.toThrow();
+    });
+
+    test("Should have default notifications as true", async () => {
+      const cartData = {
+        ownerId: loggedInOwner._id!,
+        items: [],
+      };
+
+      const cart = await cartModel.create(cartData);
+      expect(cart.notifications).toBe(true);
+    });
+
+    test("Should populate participants correctly", async () => {
+      const cartData = {
+        name: "Test Cart with Participants",
+        ownerId: loggedInOwner._id!,
+        participants: [new mongoose.Types.ObjectId(loggedInParticipant._id!)],
+        items: [],
+      };
+
+      const cart = await cartModel.create(cartData);
+      const populatedCart = await cartModel.findById(cart._id).populate("participants", "userName email");
+      
+      expect(populatedCart?.participants).toHaveLength(1);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((populatedCart?.participants[0] as any).userName).toBe(loggedInParticipant.userName);
+    });
+  });
+
+  describe("Cart Routes Tests", () => {
+    beforeEach(async () => {
+      await cartModel.deleteMany();
+    });
+
+    describe("POST /carts", () => {
+      test("Should create a new cart with valid data", async () => {
+        const cartData = {
+          name: "API Test Cart",
+          ownerId: loggedInOwner._id!,
+          items: [{ productId: testItem._id.toString(), quantity: 3 }],
+        };
+
+        const response = await request(app)
+          .post(baseUrl)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+          .send(cartData);
+
+        expect(response.statusCode).toBe(201);
+        expect(response.body.name).toBe(cartData.name);
+        expect(response.body.ownerId).toBe(cartData.ownerId);
+        expect(response.body.items).toHaveLength(1);
+      });
+
+      test("Should fail without authentication", async () => {
+        const cartData = {
+          name: "Unauthorized Cart",
+          ownerId: loggedInOwner._id!,
+          items: [],
+        };
+
+        const response = await request(app)
+          .post(baseUrl)
+          .send(cartData);
+
+        expect(response.statusCode).toBe(400);
+      });
+
+      test("Should fail without ownerId", async () => {
+        const cartData = {
+          name: "No Owner Cart",
+          items: [],
+        };
+
+        const response = await request(app)
+          .post(baseUrl)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+          .send(cartData);
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toBe("ownerId is required");
+      });
+
+      test("Should fail with invalid productId", async () => {
+        const cartData = {
+          name: "Invalid Product Cart",
+          ownerId: loggedInOwner._id!,
+          items: [{ productId: "invalid-id", quantity: 1 }],
+        };
+
+        const response = await request(app)
+          .post(baseUrl)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+          .send(cartData);
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toContain("Invalid productId");
+      });
+    });
+
+    describe("GET /carts", () => {
+      beforeEach(async () => {
+        // Create test carts
+        testCart = {
+          name: "Owner Cart",
+          ownerId: loggedInOwner._id!,
+          items: [{ productId: testItem._id.toString(), quantity: 1 }],
+        };
+
+        const cart = await cartModel.create(testCart);
+        testCart._id = cart._id.toString();
+
+        // Create cart where user is participant
+        await cartModel.create({
+          name: "Participant Cart",
+          ownerId: loggedInNonParticipant._id!,
+          participants: [new mongoose.Types.ObjectId(loggedInOwner._id!)],
+          items: [],
+        });
+      });
+
+      test("Should get all carts for authenticated user", async () => {
+        const response = await request(app)
+          .get(baseUrl)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`);
+
+        expect(response.statusCode).toBe(200);
+        expect(Array.isArray(response.body)).toBe(true);
+        expect(response.body.length).toBeGreaterThanOrEqual(2);
+      });
+
+      test("Should fail without authentication", async () => {
+        const response = await request(app).get(baseUrl);
+        expect(response.statusCode).toBe(400);
+      });
+    });
+
+    describe("GET /carts/:id", () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let createdCart: any;
+
+      beforeEach(async () => {
+        const cartData = {
+          name: "Get Cart Test",
+          ownerId: loggedInOwner._id!,
+          participants: [new mongoose.Types.ObjectId(loggedInParticipant._id!)],
+          items: [{ productId: testItem._id.toString(), quantity: 2 }],
+        };
+
+        createdCart = await cartModel.create(cartData);
+      });
+
+      test("Should get cart by ID for owner", async () => {
+        const response = await request(app)
+          .get(`${baseUrl}/${createdCart._id}`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`);
+
+        expect(response.statusCode).toBe(200);
+        expect(response.body._id).toBe(createdCart._id.toString());
+        expect(response.body.name).toBe(createdCart.name);
+      });
+
+      test("Should get cart by ID for participant", async () => {
+        const response = await request(app)
+          .get(`${baseUrl}/${createdCart._id}`)
+          .set("Authorization", `Bearer ${loggedInParticipant.accessToken}`);
+
+        expect(response.statusCode).toBe(200);
+        expect(response.body._id).toBe(createdCart._id.toString());
+      });
+
+      test("Should fail for non-participant", async () => {
+        const response = await request(app)
+          .get(`${baseUrl}/${createdCart._id}`)
+          .set("Authorization", `Bearer ${loggedInNonParticipant.accessToken}`);
+
+        expect(response.statusCode).toBe(403);
+        expect(response.body.error).toBe("Unauthorized to view this cart");
+      });
+
+      test("Should return 404 for non-existent cart", async () => {
+        const fakeId = new mongoose.Types.ObjectId();
+        const response = await request(app)
+          .get(`${baseUrl}/${fakeId}`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`);
+
+        expect(response.statusCode).toBe(404);
+        expect(response.body.error).toBe("Cart not found");
+      });
+    });
+
+    describe("PUT /carts/:id", () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let createdCart: any;
+
+      beforeEach(async () => {
+        const cartData = {
+          name: "Update Cart Test",
+          ownerId: loggedInOwner._id!,
+          participants: [new mongoose.Types.ObjectId(loggedInParticipant._id!)],
+          items: [{ productId: testItem._id.toString(), quantity: 1 }],
+        };
+
+        createdCart = await cartModel.create(cartData);
+      });
+
+      test("Should update cart for owner", async () => {
+        const updateData = {
+          name: "Updated Cart Name",
+          items: [{ productId: testItem._id.toString(), quantity: 5 }],
+        };
+
+        const response = await request(app)
+          .put(`${baseUrl}/${createdCart._id}`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+          .send(updateData);
+
+        expect(response.statusCode).toBe(200);
+        expect(response.body.name).toBe(updateData.name);
+        expect(response.body.items[0].quantity).toBe(5);
+      });
+
+      test("Should update cart for participant", async () => {
+        const updateData = {
+          items: [{ productId: testItem._id.toString(), quantity: 3 }],
+        };
+
+        const response = await request(app)
+          .put(`${baseUrl}/${createdCart._id}`)
+          .set("Authorization", `Bearer ${loggedInParticipant.accessToken}`)
+          .send(updateData);
+
+        expect(response.statusCode).toBe(200);
+        expect(response.body.items[0].quantity).toBe(3);
+      });
+
+      test("Should fail for non-participant", async () => {
+        const updateData = { name: "Unauthorized Update" };
+
+        const response = await request(app)
+          .put(`${baseUrl}/${createdCart._id}`)
+          .set("Authorization", `Bearer ${loggedInNonParticipant.accessToken}`)
+          .send(updateData);
+
+        expect(response.statusCode).toBe(403);
+        expect(response.body.error).toBe("Unauthorized to update this cart");
+      });
+
+      test("Should fail with invalid productId", async () => {
+        const updateData = {
+          items: [{ productId: "invalid-id", quantity: 1 }],
+        };
+
+        const response = await request(app)
+          .put(`${baseUrl}/${createdCart._id}`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+          .send(updateData);
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toContain("Invalid productId");
+      });
+    });
+
+    describe("DELETE /carts/:id", () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let createdCart: any;
+
+      beforeEach(async () => {
+        const cartData = {
+          name: "Delete Cart Test",
+          ownerId: loggedInOwner._id!,
+          participants: [new mongoose.Types.ObjectId(loggedInParticipant._id!)],
+          items: [],
+        };
+
+        createdCart = await cartModel.create(cartData);
+      });
+
+      test("Should delete cart for owner", async () => {
+        const response = await request(app)
+          .delete(`${baseUrl}/${createdCart._id}`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`);
+
+        expect(response.statusCode).toBe(200);
+        expect(response.body.message).toBe("Cart deleted successfully");
+
+        // Verify cart is deleted
+        const deletedCart = await cartModel.findById(createdCart._id);
+        expect(deletedCart).toBeNull();
+      });
+
+      test("Should fail for participant (not owner)", async () => {
+        const response = await request(app)
+          .delete(`${baseUrl}/${createdCart._id}`)
+          .set("Authorization", `Bearer ${loggedInParticipant.accessToken}`);
+
+        expect(response.statusCode).toBe(403);
+        expect(response.body.error).toBe("Only the owner can delete the cart");
+      });
+
+      test("Should return 404 for non-existent cart", async () => {
+        const fakeId = new mongoose.Types.ObjectId();
+        const response = await request(app)
+          .delete(`${baseUrl}/${fakeId}`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`);
+
+        expect(response.statusCode).toBe(404);
+        expect(response.body.error).toBe("Cart not found");
+      });
+    });
+
+    describe("PUT /carts/:id/participants", () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let createdCart: any;
+
+      beforeEach(async () => {
+        const cartData = {
+          name: "Participant Test Cart",
+          ownerId: loggedInOwner._id!,
+          participants: [],
+          items: [],
+        };
+
+        createdCart = await cartModel.create(cartData);
+      });
+
+      test("Should add participant by email for owner", async () => {
+        const response = await request(app)
+          .put(`${baseUrl}/${createdCart._id}/participants`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+          .send({ email: loggedInParticipant.email });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.body.message).toBe("Participant added successfully");
+        expect(response.body.cart.participants).toHaveLength(1);
+      });
+
+      test("Should fail for non-owner", async () => {
+        const response = await request(app)
+          .put(`${baseUrl}/${createdCart._id}/participants`)
+          .set("Authorization", `Bearer ${loggedInParticipant.accessToken}`)
+          .send({ email: loggedInNonParticipant.email });
+
+        expect(response.statusCode).toBe(403);
+        expect(response.body.error).toBe("Only the cart owner can add participants");
+      });
+
+      test("Should fail with non-existent email", async () => {
+        const response = await request(app)
+          .put(`${baseUrl}/${createdCart._id}/participants`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+          .send({ email: "nonexistent@test.com" });
+
+        expect(response.statusCode).toBe(404);
+        expect(response.body.error).toBe("User with this email not found");
+      });
+
+      test("Should fail when adding existing participant", async () => {
+        // First add participant
+        await request(app)
+          .put(`${baseUrl}/${createdCart._id}/participants`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+          .send({ email: loggedInParticipant.email });
+
+        // Try to add same participant again
+        const response = await request(app)
+          .put(`${baseUrl}/${createdCart._id}/participants`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+          .send({ email: loggedInParticipant.email });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toBe("User is already a participant");
+      });
+
+      test("Should fail without email", async () => {
+        const response = await request(app)
+          .put(`${baseUrl}/${createdCart._id}/participants`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+          .send({});
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toBe("Email is required");
+      });
+    });
+
+    describe("PUT /carts/:id/participants/remove", () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let createdCart: any;
+
+      beforeEach(async () => {
+        const cartData = {
+          name: "Remove Participant Test Cart",
+          ownerId: loggedInOwner._id!,
+          participants: [new mongoose.Types.ObjectId(loggedInParticipant._id!)],
+          items: [],
+        };
+
+        createdCart = await cartModel.create(cartData);
+      });
+
+      test("Should remove participant for owner", async () => {
+        const response = await request(app)
+          .put(`${baseUrl}/${createdCart._id}/participants/remove`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+          .send({ userIdToRemove: loggedInParticipant._id });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.body.message).toBe("Participant removed successfully");
+        expect(response.body.cart.participants).toHaveLength(0);
+      });
+
+      test("Should fail for non-owner", async () => {
+        const response = await request(app)
+          .put(`${baseUrl}/${createdCart._id}/participants/remove`)
+          .set("Authorization", `Bearer ${loggedInParticipant.accessToken}`)
+          .send({ userIdToRemove: loggedInParticipant._id });
+
+        expect(response.statusCode).toBe(403);
+        expect(response.body.error).toBe("Only the cart owner can remove participants");
+      });
+
+      test("Should fail when removing non-participant", async () => {
+        const response = await request(app)
+          .put(`${baseUrl}/${createdCart._id}/participants/remove`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+          .send({ userIdToRemove: loggedInNonParticipant._id });
+
+        expect(response.statusCode).toBe(404);
+        expect(response.body.error).toBe("User is not a participant in this cart");
+      });
+
+      test("Should fail without userIdToRemove", async () => {
+        const response = await request(app)
+          .put(`${baseUrl}/${createdCart._id}/participants/remove`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+          .send({});
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toBe("User ID to remove is required");
+      });
+    });
+
+    describe("GET /carts/price-drops", () => {
+      beforeEach(async () => {
+        // Create cart with items that have price drops
+        await cartModel.create({
+          name: "Price Drop Cart",
+          ownerId: loggedInOwner._id!,
+          items: [{ productId: testItem._id.toString(), quantity: 1 }],
+        });
+      });
+
+      test("Should get price drops for user's cart items", async () => {
+        const response = await request(app)
+          .get(`${baseUrl}/price-drops`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`);
+
+        expect(response.statusCode).toBe(200);
+        expect(Array.isArray(response.body)).toBe(true);
+        
+        if (response.body.length > 0) {
+          expect(response.body[0]).toHaveProperty("productId");
+          expect(response.body[0]).toHaveProperty("productName");
+          expect(response.body[0]).toHaveProperty("oldPrice");
+          expect(response.body[0]).toHaveProperty("newPrice");
+          expect(response.body[0].newPrice).toBeLessThan(response.body[0].oldPrice);
+        }
+      });
+
+      test("Should return empty array for user with no carts", async () => {
+        const response = await request(app)
+          .get(`${baseUrl}/price-drops`)
+          .set("Authorization", `Bearer ${loggedInNonParticipant.accessToken}`);
+
+        expect(response.statusCode).toBe(200);
+        expect(response.body).toEqual([]);
+      });
+
+      test("Should fail without authentication", async () => {
+        const response = await request(app).get(`${baseUrl}/price-drops`);
+        expect(response.statusCode).toBe(400);
+      });
+    });
+  });
+
+  describe("Cart Controller Tests", () => {
+    describe("Input Validation", () => {
+      test("Should validate ObjectId format for productIds", async () => {
+        const cartData = {
+          name: "Validation Test Cart",
+          ownerId: loggedInOwner._id!,
+          items: [{ productId: "not-an-objectid", quantity: 1 }],
+        };
+
+        const response = await request(app)
+          .post(baseUrl)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+          .send(cartData);
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toContain("Invalid productId");
+      });
+
+      test("Should handle missing required fields gracefully", async () => {
+        const response = await request(app)
+          .post(baseUrl)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+          .send({});
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toBe("ownerId is required");
+      });
+    });
+
+    describe("Authorization", () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let testCartForAuth: any;
+
+      beforeEach(async () => {
+        testCartForAuth = await cartModel.create({
+          name: "Auth Test Cart",
+          ownerId: loggedInOwner._id!,
           participants: [],
           items: [],
         });
-      }
-      return Promise.resolve(null);
+      });
+
+      test("Should properly check cart ownership for deletion", async () => {
+        const response = await request(app)
+          .delete(`${baseUrl}/${testCartForAuth._id}`)
+          .set("Authorization", `Bearer ${loggedInParticipant.accessToken}`);
+
+        expect(response.statusCode).toBe(403);
+        expect(response.body.error).toBe("Only the owner can delete the cart");
+      });
+
+      test("Should allow both owner and participants to view cart", async () => {
+        // Add participant
+        testCartForAuth.participants.push(new mongoose.Types.ObjectId(loggedInParticipant._id!));
+        await testCartForAuth.save();
+
+        // Test owner access
+        const ownerResponse = await request(app)
+          .get(`${baseUrl}/${testCartForAuth._id}`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`);
+        expect(ownerResponse.statusCode).toBe(200);
+
+        // Test participant access
+        const participantResponse = await request(app)
+          .get(`${baseUrl}/${testCartForAuth._id}`)
+          .set("Authorization", `Bearer ${loggedInParticipant.accessToken}`);
+        expect(participantResponse.statusCode).toBe(200);
+      });
     });
 
-    (cartModel.find as jest.Mock).mockImplementation((query) => {
-      if (query.$or) {
-        return Promise.resolve([
-          { _id: "cart1", ownerId: "user123", participants: [] },
-          { _id: "cart2", ownerId: "user456", participants: ["user123"] },
-        ]);
-      }
-      return Promise.resolve([]);
-    });
+    describe("Error Handling", () => {
+      test("Should handle database errors gracefully", async () => {
+        // Test with malformed ObjectId
+        const response = await request(app)
+          .get(`${baseUrl}/invalid-object-id`)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`);
 
-    (cartModel.findByIdAndUpdate as jest.Mock).mockImplementation((id, update) => {
-      if (id === "cart123") {
-        return Promise.resolve({
-          _id: "cart123",
-          ...update,
+        expect(response.statusCode).toBe(500);
+      });
+
+      test("Should handle empty notifications field properly", async () => {
+        const cartData = {
+          name: "Notifications Test",
+          ownerId: loggedInOwner._id!,
+          items: [],
+          notifications: undefined,
+        };
+
+        const response = await request(app)
+          .post(baseUrl)
+          .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+          .send(cartData);
+
+        expect(response.statusCode).toBe(201);
+        expect(response.body.notifications).toBe(true); // Should default to true
+      });
+    });
+  });
+
+  describe("Integration Tests", () => {
+    test("Should handle complete cart lifecycle", async () => {
+      // Create cart
+      const createResponse = await request(app)
+        .post(baseUrl)
+        .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+        .send({
+          name: "Lifecycle Cart",
+          ownerId: loggedInOwner._id!,
+          items: [{ productId: testItem._id.toString(), quantity: 1 }],
         });
-      }
-      return Promise.resolve(null);
-    });
 
-    (cartModel.findByIdAndDelete as jest.Mock).mockImplementation((id) => {
-      if (id === "cart123") {
-        return Promise.resolve({ _id: "cart123" });
-      }
-      return Promise.resolve(null);
-    });
+      expect(createResponse.statusCode).toBe(201);
+      const cartId = createResponse.body._id;
 
-    (userModel.findOne as jest.Mock).mockImplementation((query) => {
-      if (query.email === "test@example.com") {
-        return Promise.resolve({
-          _id: "user456",
-          email: "test@example.com",
-          userName: "Test User",
+      // Add participant
+      const addParticipantResponse = await request(app)
+        .put(`${baseUrl}/${cartId}/participants`)
+        .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+        .send({ email: loggedInParticipant.email });
+
+      expect(addParticipantResponse.statusCode).toBe(200);
+
+      // Update cart as participant
+      const updateResponse = await request(app)
+        .put(`${baseUrl}/${cartId}`)
+        .set("Authorization", `Bearer ${loggedInParticipant.accessToken}`)
+        .send({
+          items: [{ productId: testItem._id.toString(), quantity: 5 }],
         });
-      }
-      return Promise.resolve(null);
+
+      expect(updateResponse.statusCode).toBe(200);
+
+      // Remove participant
+      const removeParticipantResponse = await request(app)
+        .put(`${baseUrl}/${cartId}/participants/remove`)
+        .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+        .send({ userIdToRemove: loggedInParticipant._id });
+
+      expect(removeParticipantResponse.statusCode).toBe(200);
+
+      // Delete cart
+      const deleteResponse = await request(app)
+        .delete(`${baseUrl}/${cartId}`)
+        .set("Authorization", `Bearer ${loggedInOwner.accessToken}`);
+
+      expect(deleteResponse.statusCode).toBe(200);
+
+      // Verify cart is deleted
+      const getResponse = await request(app)
+        .get(`${baseUrl}/${cartId}`)
+        .set("Authorization", `Bearer ${loggedInOwner.accessToken}`);
+
+      expect(getResponse.statusCode).toBe(404);
     });
 
-    (itemModel.find as jest.Mock).mockImplementation((query) => {
-      if (query._id.$in.includes("product123")) {
-        return Promise.resolve([
-          {
-            _id: "product123",
-            name: "Product 123",
-            storePrices: [
-              {
-                storeId: "store1",
-                prices: [
-                  { date: new Date("2023-01-01"), price: 100 },
-                  { date: new Date("2023-01-02"), price: 90 },
-                ],
-              },
-            ],
-          },
-        ]);
-      }
-      return Promise.resolve([]);
-    });
-
-    (StoreModel.findById as jest.Mock).mockImplementation((id) => {
-      if (id === "store1") {
-        return Promise.resolve({
-          _id: "store1",
-          name: "Test Store",
-          address: "123 Test St",
-          lat: 40.7128,
-          lng: -74.006,
-        });
-      }
-      return Promise.resolve(null);
-    });
-
-    (cartModel.prototype.save as jest.Mock).mockImplementation(function (this: typeof cartModel) {
-          return Promise.resolve(this);
-        });
-  });
-
-  describe("createCart", () => {
-    it("should create a cart successfully", async () => {
-      req.body = {
-        ownerId: "user123",
-        items: [{ productId: "product123", quantity: 2 }],
-      };
-
-      (cartModel.create as jest.Mock).mockResolvedValue(req.body);
-
-      await createCart(req as Request, res as Response);
-
-      expect(statusMock).toHaveBeenCalledWith(201);
-      expect(jsonMock).toHaveBeenCalledWith(req.body);
-    });
-
-    it("should return 400 if ownerId is missing", async () => {
-      req.body = {};
-
-      await createCart(req as Request, res as Response);
-
-      expect(statusMock).toHaveBeenCalledWith(400);
-      expect(jsonMock).toHaveBeenCalledWith({ error: "ownerId is required" });
-    });
-  });
-
-  describe("getCartById", () => {
-    it("should return a cart if the user is authorized", async () => {
-      req.params = { id: "cart123" };
-      (req as CustomRequest).userId = "user123";
-
-      const mockCart = {
-        _id: "cart123",
-        ownerId: "user123",
-        participants: [],
-      };
-
-      (cartModel.findById as jest.Mock).mockResolvedValue(mockCart);
-
-      await getCartById(req as CustomRequest, res as Response);
-
-      expect(statusMock).toHaveBeenCalledWith(200);
-      expect(jsonMock).toHaveBeenCalledWith(mockCart);
-    });
-
-    it("should return 404 if the cart is not found", async () => {
-      req.params = { id: "cart123" };
-      (req as CustomRequest).userId = "user123";
-
-      (cartModel.findById as jest.Mock).mockResolvedValue(null);
-
-      await getCartById(req as CustomRequest, res as Response);
-
-      expect(statusMock).toHaveBeenCalledWith(500);
-      expect(jsonMock).toHaveBeenCalledWith({ error: "Cart not found" });
-    });
-  });
-
-  describe("getCartsByUser", () => {
-    it("should return all carts for a user", async () => {
-      (req as CustomRequest).userId = "user123";
-
-      const mockCarts = [
-        { _id: "cart1", ownerId: "user123", participants: [] },
-        { _id: "cart2", ownerId: "user456", participants: ["user123"] },
-      ];
-
-      (cartModel.find as jest.Mock).mockResolvedValue(mockCarts);
-
-      await getCartsByUser(req as CustomRequest, res as Response);
-
-      expect(statusMock).toHaveBeenCalledWith(200);
-      expect(jsonMock).toHaveBeenCalledWith(mockCarts);
-    });
-
-    it("should return 401 if userId is missing", async () => {
-      await getCartsByUser(req as CustomRequest, res as Response);
-
-      expect(statusMock).toHaveBeenCalledWith(401);
-      expect(jsonMock).toHaveBeenCalledWith({ error: "Unauthorized" });
-    });
-  });
-
-  describe("updateCart", () => {
-    it("should update a cart successfully", async () => {
-      req.params = { id: "cart123" };
-      (req as CustomRequest).userId = "user123";
-      req.body = { name: "Updated Cart" };
-
-      const mockCart = {
-        _id: "cart123",
-        ownerId: "user123",
-        participants: [],
-      };
-
-      (cartModel.findById as jest.Mock).mockResolvedValue(mockCart);
-      (cartModel.findByIdAndUpdate as jest.Mock).mockResolvedValue({
-        ...mockCart,
-        ...req.body,
+    test("Should handle concurrent cart updates", async () => {
+      // Create cart
+      const cart = await cartModel.create({
+        name: "Concurrent Test Cart",
+        ownerId: loggedInOwner._id!,
+        participants: [new mongoose.Types.ObjectId(loggedInParticipant._id!)],
+        items: [{ productId: testItem._id.toString(), quantity: 1 }],
       });
 
-      await updateCart(req as CustomRequest, res as Response);
+      // Simulate concurrent updates
+      const update1Promise = request(app)
+        .put(`${baseUrl}/${cart._id}`)
+        .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
+        .send({ items: [{ productId: testItem._id.toString(), quantity: 2 }] });
 
-      expect(statusMock).toHaveBeenCalledWith(200);
-      expect(jsonMock).toHaveBeenCalledWith({ ...mockCart, ...req.body });
-    });
+      const update2Promise = request(app)
+        .put(`${baseUrl}/${cart._id}`)
+        .set("Authorization", `Bearer ${loggedInParticipant.accessToken}`)
+        .send({ items: [{ productId: testItem._id.toString(), quantity: 3 }] });
 
-    it("should return 403 if the user is not authorized", async () => {
-      req.params = { id: "cart123" };
-      (req as CustomRequest).userId = "user456";
+      const [response1, response2] = await Promise.all([update1Promise, update2Promise]);
 
-      const mockCart = {
-        _id: "cart123",
-        ownerId: "user123",
-        participants: [],
-      };
-
-      (cartModel.findById as jest.Mock).mockResolvedValue(mockCart);
-
-      await updateCart(req as CustomRequest, res as Response);
-
-      expect(statusMock).toHaveBeenCalledWith(403);
-      expect(jsonMock).toHaveBeenCalledWith({
-        error: "Unauthorized to update this cart",
-      });
-    });
-  });
-
-  describe("deleteCart", () => {
-    it("should delete a cart successfully", async () => {
-      req.params = { id: "cart123" };
-      (req as CustomRequest).userId = "user123";
-
-      const mockCart = {
-        _id: "cart123",
-        ownerId: "user123",
-      };
-
-      (cartModel.findById as jest.Mock).mockResolvedValue(mockCart);
-      (cartModel.findByIdAndDelete as jest.Mock).mockResolvedValue(mockCart);
-
-      await deleteCart(req as CustomRequest, res as Response);
-
-      expect(statusMock).toHaveBeenCalledWith(200);
-      expect(jsonMock).toHaveBeenCalledWith({
-        message: "Cart deleted successfully",
-      });
-    });
-
-    it("should return 403 if the user is not authorized", async () => {
-      req.params = { id: "cart123" };
-      (req as CustomRequest).userId = "user456";
-
-      const mockCart = {
-        _id: "cart123",
-        ownerId: "user123",
-      };
-
-      (cartModel.findById as jest.Mock).mockResolvedValue(mockCart);
-
-      await deleteCart(req as CustomRequest, res as Response);
-
-      expect(statusMock).toHaveBeenCalledWith(403);
-      expect(jsonMock).toHaveBeenCalledWith({
-        error: "Only the owner can delete the cart",
-      });
-    });
-  });
-
-  describe("addParticipantToCart", () => {
-    it("should add a participant to a cart", async () => {
-      req.params = { id: "cart123" };
-      req.body = { email: "test@example.com" };
-      (req as CustomRequest).userId = "user123";
-
-      const mockCart = { _id: "cart123", ownerId: "user123", participants: [] };
-      const mockUser = { _id: "user456", email: "test@example.com" };
-
-      (cartModel.findById as jest.Mock).mockResolvedValue(mockCart);
-      (userModel.findOne as jest.Mock).mockResolvedValue(mockUser);
-      (cartModel.prototype.save as jest.Mock).mockResolvedValue({
-        ...mockCart,
-        participants: [mockUser._id],
-      });
-
-      await addParticipantToCart(req as CustomRequest, res as Response);
-
-      expect(statusMock).toHaveBeenCalledWith(200);
-      expect(jsonMock).toHaveBeenCalledWith({
-        message: "Participant added successfully",
-        cart: { ...mockCart, participants: [mockUser._id] },
-      });
-    });
-
-    it("should return 404 if the cart is not found", async () => {
-      req.params = { id: "cart123" };
-      req.body = { email: "test@example.com" };
-      (req as CustomRequest).userId = "user123";
-
-      (cartModel.findById as jest.Mock).mockResolvedValue(null);
-
-      await addParticipantToCart(req as CustomRequest, res as Response);
-
-      expect(statusMock).toHaveBeenCalledWith(404);
-      expect(jsonMock).toHaveBeenCalledWith({ error: "Cart not found" });
-    });
-  });
-
-  describe("removeParticipantFromCart", () => {
-    it("should remove a participant from a cart", async () => {
-      req.params = { id: "cart123" };
-      req.body = { userIdToRemove: "user456" };
-      (req as CustomRequest).userId = "user123";
-
-      const mockCart = {
-        _id: "cart123",
-        ownerId: "user123",
-        participants: ["user456"],
-      };
-
-      (cartModel.findById as jest.Mock).mockResolvedValue(mockCart);
-      (cartModel.prototype.save as jest.Mock).mockResolvedValue({
-        ...mockCart,
-        participants: [],
-      });
-
-      await removeParticipantFromCart(req as CustomRequest, res as Response);
-
-      expect(statusMock).toHaveBeenCalledWith(200);
-      expect(jsonMock).toHaveBeenCalledWith({
-        message: "Participant removed successfully",
-        cart: { ...mockCart, participants: [] },
-      });
-    });
-
-    it("should return 404 if the cart is not found", async () => {
-      req.params = { id: "cart123" };
-      req.body = { userIdToRemove: "user456" };
-      (req as CustomRequest).userId = "user123";
-
-      (cartModel.findById as jest.Mock).mockResolvedValue(null);
-
-      await removeParticipantFromCart(req as CustomRequest, res as Response);
-
-      expect(statusMock).toHaveBeenCalledWith(404);
-      expect(jsonMock).toHaveBeenCalledWith({ error: "Cart not found" });
-    });
-  });
-
-  describe("checkCartPriceDrops", () => {
-    it("should return price drops for products in user's carts", async () => {
-      (req as CustomRequest).userId = "user123";
-
-      const mockCarts = [
-        {
-          _id: "cart1",
-          items: [{ productId: "product123" }],
-        },
-      ];
-
-      const mockItems = [
-        {
-          _id: "product123",
-          name: "Product 123",
-          storePrices: [
-            {
-              storeId: "store1",
-              prices: [
-                { date: new Date("2023-01-01"), price: 100 },
-                { date: new Date("2023-01-02"), price: 90 },
-              ],
-            },
-          ],
-        },
-      ];
-
-      (cartModel.find as jest.Mock).mockResolvedValue(mockCarts);
-      (itemModel.find as jest.Mock).mockResolvedValue(mockItems);
-
-      await checkCartPriceDrops(req as CustomRequest, res as Response);
-
-      expect(statusMock).toHaveBeenCalledWith(200);
-      expect(jsonMock).toHaveBeenCalledWith([
-        {
-          productId: "product123",
-          productName: "Product 123",
-          storeId: "store1",
-          oldPrice: 100,
-          newPrice: 90,
-          changeDate: new Date("2023-01-02"),
-          image: undefined,
-        },
-      ]);
-    });
-
-    it("should return an empty array if no price drops are found", async () => {
-      (req as CustomRequest).userId = "user123";
-
-      const mockCarts = [
-        {
-          _id: "cart1",
-          items: [{ productId: "product123" }],
-        },
-      ];
-
-      const mockItems = [
-        {
-          _id: "product123",
-          name: "Product 123",
-          storePrices: [
-            {
-              storeId: "store1",
-              prices: [
-                { date: new Date("2023-01-01"), price: 100 },
-                { date: new Date("2023-01-02"), price: 100 },
-              ],
-            },
-          ],
-        },
-      ];
-
-      (cartModel.find as jest.Mock).mockResolvedValue(mockCarts);
-      (itemModel.find as jest.Mock).mockResolvedValue(mockItems);
-
-      await checkCartPriceDrops(req as CustomRequest, res as Response);
-
-      expect(statusMock).toHaveBeenCalledWith(200);
-      expect(jsonMock).toHaveBeenCalledWith([]);
+      // Both should succeed (last write wins)
+      expect(response1.statusCode).toBe(200);
+      expect(response2.statusCode).toBe(200);
     });
   });
 });

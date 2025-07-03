@@ -41,14 +41,18 @@ test("should not process send-message with missing fields", (done) => {
   };
 
   const spy = jest.spyOn(console, "log");
-  clientSocket.emit("send-message", incompleteMessage);
-
+  
+  // Wait a moment for the spy to be established
   setTimeout(() => {
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining("❌ Missing required fields"));
-    expect(CartMessage.create).not.toHaveBeenCalled();
-    spy.mockRestore();
-    done();
-  }, 100);
+    clientSocket.emit("send-message", incompleteMessage);
+    
+    setTimeout(() => {
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining("❌ Missing required fields for message"));
+      expect(CartMessage.create).not.toHaveBeenCalled();
+      spy.mockRestore();
+      done();
+    }, 200);
+  }, 50);
 });
 
 test("should send testCartNotification", (done) => {

@@ -1,3 +1,6 @@
+// Set environment variable before importing modules
+process.env.DOMAIN_BASE = 'http://localhost:3000';
+
 import axios from 'axios';
 import { io, notifyCartPriceChanges } from '../services/websocket';
 import cartModel from '../models/cart';

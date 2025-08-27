@@ -6,7 +6,7 @@ import { Document } from "mongoose";
 import { OAuth2Client } from "google-auth-library";
 import crypto from "crypto";
 
-// טיפוס מותאם אישית שמכיל userId מה-JWT
+
 export interface AuthenticatedRequest extends Request {
   userId?: string;
 }

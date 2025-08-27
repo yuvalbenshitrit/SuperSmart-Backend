@@ -4,13 +4,21 @@ import StoreModel from "../models/store";
 const createStore = async (req: Request, res: Response) => {
   try {
     console.log("Request Body:", req.body);
-    const { name } = req.body;
+    const { name, address, lat, lng } = req.body;
 
     if (!name) {
       return res.status(400).json({ message: "Store name is required" });
     }
 
-    const newStore = new StoreModel({ name });
+    if (!address) {
+      return res.status(400).json({ message: "Store address is required" });
+    }
+
+    if (lat === undefined || lng === undefined) {
+      return res.status(400).json({ message: "Store coordinates (lat, lng) are required" });
+    }
+
+    const newStore = new StoreModel({ name, address, lat, lng });
     await newStore.save();
 
     res.status(201).json(newStore);

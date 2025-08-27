@@ -19,7 +19,7 @@ export const setupWebsockets = (server: HTTPServer) => {
        credentials: true,
       methods: ["GET", "POST"],
     },
-    // הגדרות נוספות לטיפול בחיבורים נופלים
+    
     pingTimeout: 60000,
     pingInterval: 25000,
      transports: ['websocket', 'polling'],
@@ -28,24 +28,24 @@ export const setupWebsockets = (server: HTTPServer) => {
   io.on("connection", (socket: Socket) => {
     console.log("🔌 WebSocket connected:", socket.id);
 
-    // Wishlist notification (כבר קיים)
+   
     socket.on("subscribe-to-wishlists", (userId: string) => {
       socket.join(`user-${userId}`);
     });
 
-    // 📥 הצטרפות לעגלת קניות
+    
     socket.on("join-cart", (cartId: string) => {
       socket.join(`cart-${cartId}`);
       console.log(`🛒 User ${socket.id} joined cart ${cartId}`);
     });
 
-    // 📤 יציאה מעגלה
+   
     socket.on("leave-cart", (cartId: string) => {
       socket.leave(`cart-${cartId}`);
       console.log(`🚪 User ${socket.id} left cart ${cartId}`);
     });
 
-    // 💬 קבלת הודעה
+   
     socket.on(
       "send-message",
       async ({ cartId, sender, message, clientId, timestamp }) => {
@@ -55,7 +55,7 @@ export const setupWebsockets = (server: HTTPServer) => {
         }
 
         try {
-          // ✨ שמור למסד נתונים
+         
           const newMessage = await CartMessage.create({
             cartId,
             sender,
@@ -75,10 +75,10 @@ export const setupWebsockets = (server: HTTPServer) => {
 
           console.log("💬 Message saved to DB and broadcast to cart:", cartId);
 
-          // שלח לכל חברי העגלה (חדר) כולל השולח
+          
           io.to(`cart-${cartId}`).emit("receive-message", messageToSend);
 
-          // 📢 Emit notification for new message
+          
           io.to(`cart-${cartId}`).emit("new-chat-notification", {
             cartId,
             sender,
@@ -89,26 +89,26 @@ export const setupWebsockets = (server: HTTPServer) => {
           });
         } catch (err) {
           console.error("❌ Error saving chat message:", err);
-          // אופציונלי: שלח התראת שגיאה למשתמש (לא חובה)
+          
           socket.emit("message-error", { error: "Failed to save message" });
         }
       }
     );
 
-    // 🏠 Join a custom room
+    
     socket.on("join-room", (roomId: string) => {
       socket.join(roomId);
       console.log(`🔗 User ${socket.id} joined room ${roomId}`);
     });
 
-    // 🛠 Get active rooms (for debugging)
+    
     socket.on("get-active-rooms", () => {
       const rooms = Array.from(io.sockets.adapter.rooms.keys());
       socket.emit("active-rooms", rooms);
       console.log("📋 Active rooms sent to client:", rooms);
     });
 
-    // 🧪 Test cart notification
+   
     socket.on(
       "testCartNotification",
       ({ cartId, productId, newPrice, oldPrice }) => {
@@ -124,7 +124,7 @@ export const setupWebsockets = (server: HTTPServer) => {
       }
     );
 
-    // 📴 ניתוק
+    
     socket.on("disconnect", () => {
       console.log("❌ WebSocket disconnected:", socket.id);
     });
@@ -133,12 +133,12 @@ export const setupWebsockets = (server: HTTPServer) => {
   return io;
 };
 
-// 📣 שליחת התראות על שינוי מחיר למשתמשים ב-wishlist (אם אתה משתמש בזה)
+
 interface PriceChange {
   productId: string;
   newPrice: number;
   oldPrice: number;
-  [key: string]: unknown; // Replace or extend with more specific fields as needed
+  [key: string]: unknown; 
 }
 
 interface WishlistService {
@@ -161,7 +161,6 @@ export const notifyPriceChanges = (
           wishlistId: wishlist._id,
           wishlistName: wishlist.name,
         };
-        // Removed unnecessary delete operation as cartId does not exist on the notification object
         io.to(`user-${wishlist.userId}`).emit("price-drop", notification);
         console.log(
           `📣 Wishlist notification sent to user-${wishlist.userId}:`,
@@ -211,7 +210,7 @@ export const notifyCartPriceChanges = (
           const cartRoom = `cart-${cart._id}`;
           const notification = {
             ...priceChange,
-            cartId: cart._id, // Ensure cartId is included
+            cartId: cart._id, 
             productName: priceChange.productName || product.name,
             image: priceChange.image || product.image,
           };

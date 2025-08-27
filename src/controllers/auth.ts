@@ -39,7 +39,7 @@ const googleSignIn = async (req: Request, res: Response) => {
         email: email,
         password: "0",
         profilePicture: payload?.picture,
-        refreshTokens: [], // ✅ לוודא שהשדה קיים ביוזר חדש
+        refreshTokens: [], 
       });
     }
 
@@ -48,8 +48,8 @@ const googleSignIn = async (req: Request, res: Response) => {
       return res.status(500).send("Token generation failed");
     }
 
-    // ✅ הוספת refreshToken למערך
-    user.refreshTokens = [tokens.refreshToken]; // או user.refreshTokens.push(...) לשמירה מרובה
+    
+    user.refreshTokens = [tokens.refreshToken]; 
     await user.save();
 
     res.status(200).send({
@@ -58,7 +58,7 @@ const googleSignIn = async (req: Request, res: Response) => {
       email: user.email,
       profilePicture: user.profilePicture,
       accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken, // ✅ שליחה ללקוח
+      refreshToken: tokens.refreshToken, 
     });
   } catch (err) {
     console.error("Google sign in error:", err);
@@ -249,7 +249,7 @@ const changePassword = async (
   req: AuthenticatedRequest,
   res: Response
 ): Promise<void> => {
-  const { id, currentPassword, newPassword } = req.body; // ✅ קבלת id מתוך body
+  const { id, currentPassword, newPassword } = req.body; 
   const userIdFromToken = req.userId;
 
   if (id !== userIdFromToken) {
@@ -263,7 +263,7 @@ const changePassword = async (
   }
 
   try {
-    const user = await userModel.findById(id); // ✅ שימוש ב-id מה-body
+    const user = await userModel.findById(id); 
     if (!user) {
       res.status(404).send({ error: "User not found" });
       return;
@@ -293,7 +293,7 @@ const requestPasswordReset = async (req: Request, res: Response) => {
   if (!user) return res.status(404).send({ error: "User not found" });
 
   const token = crypto.randomBytes(32).toString("hex");
-  const expires = new Date(Date.now() + 3600000); // שעה קדימה
+  const expires = new Date(Date.now() + 3600000); 
 
   user.resetPasswordToken = token;
   user.resetPasswordExpires = expires;

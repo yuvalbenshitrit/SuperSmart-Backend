@@ -3,7 +3,7 @@ import cartModel from "../models/cart";
 import userModel from "../models/user";
 import { AuthenticatedRequest } from "./auth";
 import itemModel, { IPrice } from "../models/item"; // Import IPrice
-import mongoose from "mongoose"; // Import mongoose for ObjectId validation
+import mongoose from "mongoose"; 
 
 export const createCart = async (req: Request, res: Response) => {
   try {
@@ -13,7 +13,7 @@ export const createCart = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "ownerId is required" });
     }
 
-    // Validate items in the cart
+   
     if (req.body.items && Array.isArray(req.body.items)) {
       for (const item of req.body.items) {
         if (!item.productId || !mongoose.isValidObjectId(item.productId)) {

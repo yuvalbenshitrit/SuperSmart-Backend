@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
-import mongoose from "mongoose"; // Import mongoose
+import mongoose from "mongoose"; 
 import wishlistModel from "../models/wishlist";
-import { WishlistWithUser } from "../types"; // Import WishlistWithUser type
+import { WishlistWithUser } from "../types"; 
 
 export const createWishlist = async (req: Request, res: Response) => {
   try {
@@ -55,7 +55,7 @@ export const getWishlistsByUser = async (req: Request, res: Response) => {
         .json({ error: "userId query parameter is required" });
     }
 
-    // Return the single wishlist as an array for compatibility
+
     const wishlist = await wishlistModel.findOne({ userId });
     res.status(200).json(wishlist ? [wishlist] : []);
   } catch (error) {

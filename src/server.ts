@@ -35,7 +35,7 @@ const app = express();
 
 
 app.use(cors({
-  origin: ['http://localhost:3000', 'https://10.10.248.141','https://supersmart.cs.colman.ac.il'],
+  origin: ['http://localhost:3000', 'https://10.10.248.141', 'https://supersmart.cs.colman.ac.il'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
 }));
 app.use(bodyParser.json());
@@ -49,10 +49,31 @@ app.use("/auth", authRoutes);
 app.use("/carts", cartRoutes);
 app.use("/wishlists", wishlistRoutes);
 app.use("/public", express.static("public"));
+
+// Placeholder image endpoint for fallback
+app.get("/placeholder/:size", (req, res) => {
+  const size = parseInt(req.params.size) || 80;
+  const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${size}" height="${size}" fill="#e2e8f0"/>
+    <rect x="${size * 0.25}" y="${size * 0.25}" width="${size * 0.5}" height="${size * 0.5}" fill="#cbd5e1"/>
+    <text x="${size / 2}" y="${size / 2 + 3}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${Math.max(8, size / 10)}" fill="#64748b">No Image</text>
+  </svg>`;
+
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+  res.send(svg);
+});
+
+// Alternative route to handle via.placeholder.com requests
+app.get("/via-placeholder/:size", (req, res) => {
+  const size = parseInt(req.params.size) || 80;
+  res.redirect(`/placeholder/${size}`);
+});
+
 app.use("/file", file_routes);
 app.use("/chat", chatRoutes)
 app.use("/", emailRoutes);
-app.use("/",mapSupermarketsRoutes);
+app.use("/", mapSupermarketsRoutes);
 app.use("/wishlists", wishlistRoutes);
 
 

@@ -20,13 +20,13 @@ import emailRoutes from "./routes/email_routes";
 import mapSupermarketsRoutes from "./routes/mapSupers";
 
 
-// Load environment variables based on the environment
+
 if (process.env.NODE_ENV === "test") {
   dotenv.config({ path: ".env_test" });
 } else if (process.env.NODE_ENV === "dev") {
   dotenv.config({ path: ".env_dev" });
 } else {
-  dotenv.config(); // loads default .env if none specified
+  dotenv.config();
 }
 
 
@@ -41,7 +41,6 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Routes
 app.use("/items", itemsRoutes);
 app.use("/stores", storesRoutes);
 app.use("/auth", authRoutes);
@@ -50,7 +49,7 @@ app.use("/carts", cartRoutes);
 app.use("/wishlists", wishlistRoutes);
 app.use("/public", express.static("public"));
 
-// Placeholder image endpoint for fallback
+
 app.get("/placeholder/:size", (req, res) => {
   const size = parseInt(req.params.size) || 80;
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
@@ -60,11 +59,10 @@ app.get("/placeholder/:size", (req, res) => {
   </svg>`;
 
   res.setHeader('Content-Type', 'image/svg+xml');
-  res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+  res.setHeader('Cache-Control', 'public, max-age=86400'); 
   res.send(svg);
 });
 
-// Alternative route to handle via.placeholder.com requests
 app.get("/via-placeholder/:size", (req, res) => {
   const size = parseInt(req.params.size) || 80;
   res.redirect(`/placeholder/${size}`);
@@ -79,7 +77,7 @@ app.use("/wishlists", wishlistRoutes);
 
 //app.use(express.static("front"));
 
-// Swagger setup
+
 const options = {
   definition: {
     openapi: "3.0.0",
@@ -108,22 +106,21 @@ app.use((req, res) => {
   res.status(200).sendFile(path.join(__dirname, "../../front/index.html"));
 });
 
-// Initialize the app
+
 const initApp = async () => {
   return new Promise<{ app: Express; server: http.Server }>(
     (resolve, reject) => {
       const server = http.createServer(app);
 
-      // Only set up WebSockets here for non-production
       if (process.env.NODE_ENV !== "production") {
         //setupWebsockets(server);
       }
 
-      // MongoDB connection options
+      
       const mongoOptions = {
-        serverSelectionTimeoutMS: 15000, // 15 seconds
-        socketTimeoutMS: 45000, // 45 seconds
-        maxPoolSize: 10, // Connection pool size
+        serverSelectionTimeoutMS: 15000, 
+        socketTimeoutMS: 45000, 
+        maxPoolSize: 10, 
         minPoolSize: 5,
       };
 

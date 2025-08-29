@@ -10,7 +10,7 @@ interface PriceChange {
   productId: string;
   newPrice: number;
   oldPrice: number;
-  [key: string]: unknown; // Extend with additional fields if needed
+  [key: string]: unknown; 
 }
 
 export const checkPriceChanges = async (lastCheckedTimestamp: Date) => {
@@ -64,8 +64,8 @@ export const findCartsWithProduct = async (productId: string) => {
       .then((carts) =>
         carts.map((cart) => ({
           ...cart,
-          _id: cart._id.toString(), // Convert _id to string
-          participants: cart.participants.map((participant) => participant.toString()), // Convert each participant ObjectId to string
+          _id: cart._id.toString(), 
+          participants: cart.participants.map((participant) => participant.toString()), 
         }))
       );
   } catch (error) {

@@ -1,10 +1,7 @@
-// קובץ: src/websockets/socketServer.ts
-
 import { Server as HTTPServer } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import CartMessage from "../models/cartMessage";
-import itemModel from "../models/item"; // Replace require() with import
-
+import itemModel from "../models/item"; 
 export let io: SocketIOServer;
 
 export const setupWebsockets = (server: HTTPServer) => {

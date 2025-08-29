@@ -7,7 +7,7 @@ export interface iCart {
   items: { productId: string; quantity: number }[];
   createdAt?: Date;
   updatedAt?: Date;
-  notifications: boolean; // Explicitly required for clarity
+  notifications: boolean; 
 }
 
 const cartSchema = new mongoose.Schema<iCart>(

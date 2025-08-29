@@ -431,13 +431,17 @@ export const predictPriceChange = async (req: Request, res: Response) => {
     );
 
     if (storePriceEntries.length === 0) {
-      return res.status(400).json({
-        message: "No price data found for this store."
+      return res.status(200).json({
+        message: "No price data found for this store.",
+        productId,
+        productName: item.name,
+        storeId,
+        prediction: null
       });
     }
 
     // Collect all prices from all entries for this store
-    const allPrices: Array<{ date: Date, price: number }> = [];
+    const allPrices: Array<{ date: Date; price: number }> = [];
     storePriceEntries.forEach(storePrice => {
       if (storePrice.prices && storePrice.prices.length > 0) {
         storePrice.prices.forEach(priceEntry => {
@@ -450,8 +454,12 @@ export const predictPriceChange = async (req: Request, res: Response) => {
     });
 
     if (allPrices.length < 3) {
-      return res.status(400).json({
-        message: "Insufficient price history for prediction. Need at least 3 price points."
+      return res.status(200).json({
+        message: "Not enough price history for prediction (need at least 3 points).",
+        productId,
+        productName: item.name,
+        storeId,
+        prediction: null
       });
     }
 
@@ -476,8 +484,8 @@ export const predictPriceChange = async (req: Request, res: Response) => {
 
     // Create prompt for Gemini AI
     const priceHistory = recentPrices
-      .map(p => `Date: ${p.date.toISOString().split('T')[0]}, Price: $${p.price}`)
-      .join('\n');
+      .map(p => `Date: ${p.date.toISOString().split("T")[0]}, Price: $${p.price}`)
+      .join("\n");
 
     const prompt = `
     Analyze the following price history for product "${item.name}" at store "${storeName}":
@@ -537,12 +545,12 @@ export const predictPriceChange = async (req: Request, res: Response) => {
         rawResponse: aiContent
       });
     }
-
   } catch (error) {
     console.error("Error predicting price change:", error);
     res.status(500).json({ message: "Failed to predict price change." });
   }
 };
+
 
 export default {
   createItem,

@@ -21,7 +21,7 @@ export const getCartMessages = async (req: Request, res: Response) => {
       }
     }
 
-    // Get messages with most recent first, then reverse for chronological order
+   
     const messages = await CartMessage.find(query)
       .sort({ timestamp: -1 })
       .limit(30);

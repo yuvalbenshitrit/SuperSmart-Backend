@@ -7,8 +7,8 @@ import {
   deleteWishlist,
   addProductToWishlist,
   removeProductFromWishlist,
-  getOrCreateSingleWishlist, // Import the new controller
-  getWishlistByUserId, // Import the new controller
+  getOrCreateSingleWishlist, 
+  getWishlistByUserId, 
 } from "../controllers/wishlist";
 
 const router = express.Router();

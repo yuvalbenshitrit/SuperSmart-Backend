@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 export interface iWishlist {
   name: string;
   userId: string;
-  products: string[]; // Array of product IDs
+  products: string[]; 
   createdAt?: Date;
   updatedAt?: Date;
 }

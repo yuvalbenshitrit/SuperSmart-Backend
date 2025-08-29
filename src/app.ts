@@ -30,9 +30,8 @@ initApp()
          key: fs.readFileSync('./ssl/myserver.key'),  
          cert: fs.readFileSync('./ssl/CSB.crt'),
       }
-      // Create HTTPS server and set up WebSockets with it
       const httpsServer = https.createServer(prop, app);
-      setupWebsockets(httpsServer); // Setup WebSockets with HTTPS server
+      setupWebsockets(httpsServer); 
       
       httpsServer.listen(port, () => {
         console.log(`🔒 Secure server running at https://supersmart.cs.colman.ac.il`);

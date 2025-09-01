@@ -12,7 +12,7 @@ dotenv.config();
 const genAI = new GoogleGenerativeAI(
   process.env.GEMINI_API_KEY || "AIzaSyCXx5QQ3MwNCcvjGKKO5xr1uOFbMUPExD4"
 );
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); //vision model for images
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); 
 
 const createItem = async (req: Request, res: Response) => {
   try {
@@ -80,12 +80,10 @@ const updateItem = async (req: Request, res: Response) => {
   try {
     const itemId = req.params.id;
 
-    // Validate itemId
     if (!mongoose.isValidObjectId(itemId)) {
       return res.status(400).json({ message: "Invalid item ID" });
     }
 
-    // Validate storeId and prices in storePrices if provided
     if (req.body.storePrices && Array.isArray(req.body.storePrices)) {
       for (const storePrice of req.body.storePrices) {
         if (!mongoose.isValidObjectId(storePrice.storeId)) {
@@ -103,13 +101,11 @@ const updateItem = async (req: Request, res: Response) => {
       }
     }
 
-    // Check if the item exists
     const existingItem = await itemModel.findById(itemId);
     if (!existingItem) {
       return res.status(404).json({ message: "Item not found" });
     }
 
-    // Update the item
     const updatedItem = await itemModel.findByIdAndUpdate(itemId, req.body, {
       new: true,
     });
@@ -152,7 +148,7 @@ const analyzeReceipt = async (req: Request, res: Response) => {
       size: req.file.size
     });
 
-    // Check if GEMINI_API_KEY is available
+    
     const apiKey = process.env.GEMINI_API_KEY;
     console.log("🔑 API Key status:", apiKey ? "Available" : "Missing");
 
@@ -183,7 +179,6 @@ const analyzeReceipt = async (req: Request, res: Response) => {
     console.log("📝 AI Response:", aiContent);
 
     if (aiContent) {
-      // More aggressive barcode extraction using regex
       const barcodeRegex = /\b\d{8,14}\b/g;
       const potentialBarcodes = aiContent.match(barcodeRegex) || [];
       const extractedBarcodes = [
@@ -196,7 +191,6 @@ const analyzeReceipt = async (req: Request, res: Response) => {
 
       console.log("Potential Barcodes Extracted:", extractedBarcodes); // Debugging
 
-      // Fetch items from the database based on the extracted barcodes
       const itemsToAdd = await itemModel.find({
         barcode: { $in: extractedBarcodes },
       });
@@ -204,8 +198,7 @@ const analyzeReceipt = async (req: Request, res: Response) => {
       if (itemsToAdd.length > 0) {
         const cartItems = itemsToAdd.map((item) => ({
           _id: item._id,
-          quantity: 1, // Default quantity
-          // You might want to include other relevant item details here if needed
+          quantity: 1, 
         }));
         return res.status(200).json({ cartItems });
       } else {
@@ -221,7 +214,6 @@ const analyzeReceipt = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("❌ Error analyzing receipt:", error);
 
-    // Check if it's a Gemini API specific error
     if (error instanceof Error) {
       console.error("Error details:", {
         name: error.name,
@@ -229,7 +221,6 @@ const analyzeReceipt = async (req: Request, res: Response) => {
         stack: error.stack
       });
 
-      // Check for specific API errors
       if (error.message.includes('API_KEY')) {
         return res.status(500).json({
           message: "Invalid API key configuration."
@@ -260,7 +251,6 @@ export const checkPriceChanges = async (req: Request, res: Response) => {
   try {
     const { lastCheckedTimestamp, productIds } = req.query;
 
-    // Validate the timestamp if provided
     if (
       lastCheckedTimestamp &&
       isNaN(Date.parse(lastCheckedTimestamp as string))
@@ -270,12 +260,10 @@ export const checkPriceChanges = async (req: Request, res: Response) => {
         .json({ message: "Invalid lastCheckedTimestamp format" });
     }
 
-    // Parse productIds if provided
     const productIdsArray = productIds
       ? (productIds as string).split(",")
       : null;
 
-    // Build the query
     const query: Record<string, unknown> = {};
     if (lastCheckedTimestamp) {
       query["storePrices.prices.date"] = {
@@ -286,7 +274,6 @@ export const checkPriceChanges = async (req: Request, res: Response) => {
       query["_id"] = { $in: productIdsArray };
     }
 
-    // Fetch items matching the query
     const items = await itemModel.find(query).lean().exec();
 
     const priceChanges: PriceChange[] = [];
@@ -327,14 +314,12 @@ export const checkWishlistPriceChanges = async (req: Request, res: Response) => 
   try {
     const { lastCheckedTimestamp, onlyWishlistItems, userId } = req.query;
 
-    // Validate required parameters
     if (onlyWishlistItems === 'true' && !userId) {
       return res
         .status(400)
         .json({ message: "userId is required when onlyWishlistItems is true" });
     }
 
-    // Validate the timestamp if provided
     if (
       lastCheckedTimestamp &&
       isNaN(Date.parse(lastCheckedTimestamp as string))
@@ -346,17 +331,14 @@ export const checkWishlistPriceChanges = async (req: Request, res: Response) => 
 
     let productIdsArray: string[] | null = null;
 
-    // If filtering by wishlist items, get the user's wishlist products
     if (onlyWishlistItems === 'true' && userId) {
       const wishlist = await wishlistModel.findOne({ userId: userId as string });
       if (!wishlist || !wishlist.products || wishlist.products.length === 0) {
-        // User has no wishlist or empty wishlist, return empty array
         return res.status(200).json([]);
       }
       productIdsArray = wishlist.products;
     }
 
-    // Build the query
     const query: Record<string, unknown> = {};
     if (lastCheckedTimestamp) {
       query["storePrices.prices.date"] = {
@@ -367,7 +349,6 @@ export const checkWishlistPriceChanges = async (req: Request, res: Response) => 
       query["_id"] = { $in: productIdsArray };
     }
 
-    // Fetch items matching the query
     const items = await itemModel.find(query).lean().exec();
 
     const priceChanges: PriceChange[] = [];
@@ -425,7 +406,6 @@ export const predictPriceChange = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Item not found" });
     }
 
-    // Find all price entries for the specific store
     const storePriceEntries = item.storePrices.filter(
       sp => sp.storeId.toString() === storeId
     );
@@ -440,7 +420,6 @@ export const predictPriceChange = async (req: Request, res: Response) => {
       });
     }
 
-    // Collect all prices from all entries for this store
     const allPrices: Array<{ date: Date; price: number }> = [];
     storePriceEntries.forEach(storePrice => {
       if (storePrice.prices && storePrice.prices.length > 0) {
@@ -463,7 +442,6 @@ export const predictPriceChange = async (req: Request, res: Response) => {
       });
     }
 
-    // Check if store exists, but don't fail if it doesn't (legacy data handling)
     let storeName = "Unknown Store";
     try {
       const store = await StoreModel.findById(storeId);
@@ -474,15 +452,12 @@ export const predictPriceChange = async (req: Request, res: Response) => {
       console.log("Store not found in database, using legacy data handling");
     }
 
-    // Sort prices by date (most recent first)
     const sortedPrices = [...allPrices].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
 
-    // Get recent price data for analysis
-    const recentPrices = sortedPrices.slice(0, 5); // Last 5 price points
+    const recentPrices = sortedPrices.slice(0, 5); 
 
-    // Create prompt for Gemini AI
     const priceHistory = recentPrices
       .map(p => `Date: ${p.date.toISOString().split("T")[0]}, Price: $${p.price}`)
       .join("\n");
@@ -512,7 +487,6 @@ export const predictPriceChange = async (req: Request, res: Response) => {
     console.log("📝 AI Response:", aiContent);
 
     try {
-      // Try to parse JSON from AI response
       const jsonMatch = aiContent.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         throw new Error("No JSON found in AI response");
@@ -520,12 +494,10 @@ export const predictPriceChange = async (req: Request, res: Response) => {
 
       const prediction = JSON.parse(jsonMatch[0]);
 
-      // Validate the prediction structure
       if (!prediction.prediction || !prediction.confidence) {
         throw new Error("Invalid prediction format");
       }
 
-      // Add metadata
       const predictionResult = {
         ...prediction,
         productId,

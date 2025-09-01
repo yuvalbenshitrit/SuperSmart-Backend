@@ -60,3 +60,30 @@ export async function sendCartEmail(email: string, cart: (string | CartItem)[]) 
     text: body,
   });
 }
+
+export async function sendPasswordResetEmail(email: string, resetLink: string) {
+  const subject = "🔒 איפוס סיסמה - Smart Supermarket";
+  
+  const body = `שלום!
+
+קיבלנו בקשה לאיפוס הסיסמה שלך.
+
+לחץ על הקישור הבא כדי לאפס את הסיסמה שלך:
+${resetLink}
+
+הקישור תקף למשך שעה אחת בלבד.
+
+אם לא ביקשת לאפס את הסיסמה, אנא התעלם מהמייל הזה.
+
+בברכה,
+צוות Smart Supermarket`;
+
+  await transporter.sendMail({
+    from: `"Smart Supermarket" <yuval056@gmail.com>`,
+    to: email,
+    subject,
+    text: body,
+  });
+}
+
+

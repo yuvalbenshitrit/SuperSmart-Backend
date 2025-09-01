@@ -5,6 +5,8 @@ import jwt, { SignOptions } from "jsonwebtoken";
 import { Document } from "mongoose";
 import { OAuth2Client } from "google-auth-library";
 import crypto from "crypto";
+import { sendPasswordResetEmail } from "../services/emailService";
+
 
 
 export interface AuthenticatedRequest extends Request {
@@ -287,23 +289,43 @@ const changePassword = async (
 };
 
 const requestPasswordReset = async (req: Request, res: Response) => {
-  const { email } = req.body;
+  try {
+    const { email } = req.body;
 
-  const user = await userModel.findOne({ email });
-  if (!user) return res.status(404).send({ error: "User not found" });
+    if (!email) {
+      return res.status(400).send({ error: "Email is required" });
+    }
 
-  const token = crypto.randomBytes(32).toString("hex");
-  const expires = new Date(Date.now() + 3600000); 
+    const user = await userModel.findOne({ email });
+    if (!user) {
+      return res.status(404).send({ error: "User not found" });
+    }
 
-  user.resetPasswordToken = token;
-  user.resetPasswordExpires = expires;
-  await user.save();
+    const token = crypto.randomBytes(32).toString("hex");
+    const expires = new Date(Date.now() + 3600000); // 1 hour
 
-  // הדפסת קישור במקום שליחה במייל
-  console.log(`Reset link: http://yourfrontend.com/reset-password/${token}`);
+    user.resetPasswordToken = token;
+    user.resetPasswordExpires = expires;
+    await user.save();
 
-  res.send({ message: "Reset email sent (log only for now)" });
+    // Send email with reset link
+    const resetLink = `${process.env.FRONTEND_URL || "https://supersmart.cs.colman.ac.il"}/reset-password/${token}`;
+
+    try {
+      await sendPasswordResetEmail(email, resetLink);
+      res.status(200).send({ message: "Password reset email sent successfully" });
+    } catch (emailError) {
+      console.error("Failed to send reset email:", emailError);
+      // Still save the token in case we want to allow manual reset
+      res.status(200).send({ message: "Reset token generated, but email failed to send" });
+    }
+
+  } catch (error) {
+    console.error("Password reset request error:", error);
+    res.status(500).send({ error: "Internal server error" });
+  }
 };
+
 
 const resetPassword = async (req: Request, res: Response) => {
   const { token, newPassword } = req.body;

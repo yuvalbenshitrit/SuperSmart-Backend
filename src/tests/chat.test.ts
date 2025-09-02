@@ -5,7 +5,6 @@ import request from 'supertest';
 import express from 'express';
 import chatRouter from '../routes/chat';
 
-// Mock CartMessage model
 jest.mock('../models/cartMessage', () => ({
   find: jest.fn(),
   create: jest.fn(),
@@ -103,7 +102,7 @@ describe('Chat Controller', () => {
   describe('addCartMessage', () => {
     it('should return 400 if required fields are missing', async () => {
       mockRequest.params = { cartId: '123' };
-      mockRequest.body = { sender: 'user' }; // missing message
+      mockRequest.body = { sender: 'user' }; 
 
       await addCartMessage(mockRequest as Request, mockResponse as Response);
 

@@ -41,7 +41,7 @@ const getStores = async (req: Request, res: Response) => {
 const getStoreById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const store = await StoreModel.findOne({ storeId: id }); // Query by `storeId`
+    const store = await StoreModel.findOne({ storeId: id }); 
 
     if (!store) {
       return res.status(404).json({ message: "Store not found" });
@@ -62,7 +62,7 @@ const updateStore = async (req: Request, res: Response) => {
     const updatedStore = await StoreModel.findOneAndUpdate(
       { storeId: id },
       { name },
-      { new: true } // Return the updated document
+      { new: true } 
     );
 
     if (!updatedStore) {

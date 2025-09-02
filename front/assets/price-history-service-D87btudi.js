@@ -1,1 +1,0 @@
-import"./index-BWxEDEOj.js";const t=()=>[{productId:"67e3c6ffe978543305230109",productName:"לחם אחיד כהה פרוס",oldPrice:8.3,newPrice:5,storeId:"65a4e1e1e1e1e1e1e1e1e1e1",changeDate:new Date,image:"https://hazihinamprod01.blob.core.windows.net/images/Items/Medium/497112.jpg",wishlistName:"רשימת מועדפים למכולת"}];export{t as getMockPriceDrops};

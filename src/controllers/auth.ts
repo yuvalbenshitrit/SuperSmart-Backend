@@ -316,7 +316,6 @@ const requestPasswordReset = async (req: Request, res: Response) => {
       res.status(200).send({ message: "Password reset email sent successfully" });
     } catch (emailError) {
       console.error("Failed to send reset email:", emailError);
-      // Still save the token in case we want to allow manual reset
       res.status(200).send({ message: "Reset token generated, but email failed to send" });
     }
 

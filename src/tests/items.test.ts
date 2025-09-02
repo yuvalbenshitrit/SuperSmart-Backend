@@ -13,11 +13,9 @@ beforeAll(async () => {
   const { app: initializedApp } = await initApp();
   app = initializedApp;
   
-  // Clean up existing data
   await itemModel.deleteMany();
   await StoreModel.deleteMany();
   
-  // Create a test store
   const testStore = new StoreModel({
     name: "Test Store",
     address: "123 Test Street",
@@ -27,7 +25,6 @@ beforeAll(async () => {
   const savedStore = await testStore.save();
   testStoreId = (savedStore._id as mongoose.Types.ObjectId).toString();
   
-  // Create a test item directly with the model (since controller has a bug)
   const directTestItem = new itemModel({
     name: "Test Product",
     category: "Test Category",
@@ -69,14 +66,13 @@ describe("Items API test suite", () => {
   
   describe("POST /items - Create Item", () => {
     test("Should fail to create item due to missing nutrition data (controller bug)", async () => {
-      // NOTE: This test exposes a bug in the controller where nutrition data is not passed to the model
       const itemData = {
         name: "Test Product",
         category: "Test Category",
         storePrices: [
           {
             storeId: testStoreId,
-            price: 10.99 // Controller expects price, not prices array
+            price: 10.99 
           }
         ]
       };
@@ -94,7 +90,6 @@ describe("Items API test suite", () => {
         .post(baseUrl)
         .send({
           name: "Test Product"
-          // Missing category and storePrices
         });
 
       expect(response.statusCode).toBe(400);
@@ -236,7 +231,6 @@ describe("Items API test suite", () => {
       expect(response.statusCode).toBe(200);
       expect(response.body.message).toBe("Item deleted successfully");
 
-      // Verify item is deleted
       const verifyResponse = await request(app).get(`${baseUrl}/${savedItemToDelete._id}`);
       expect(verifyResponse.statusCode).toBe(404);
     });
@@ -252,14 +246,12 @@ describe("Items API test suite", () => {
     });
 
     test("Should analyze receipt with mock image", async () => {
-      // Create a mock image buffer
       const mockImageBuffer = Buffer.from("mock-image-data");
 
       const response = await request(app)
         .post(`${baseUrl}/analyze-receipt`)
         .attach("receiptImage", mockImageBuffer, "test-receipt.jpg");
 
-      // Since this involves external AI service, we expect either success or controlled failure
       expect([200, 500]).toContain(response.statusCode);
       
       if (response.statusCode === 200) {
@@ -304,7 +296,6 @@ describe("Items API test suite", () => {
     test("Should fail validation for missing required fields", async () => {
       const invalidItem = new itemModel({
         name: "Missing Fields Product"
-        // Missing category and nutrition
       });
 
       let error;
@@ -328,8 +319,8 @@ describe("Items API test suite", () => {
           carbs: 15.0,
           calories: 100,
           sodium: 200,
-          calcium: null, // Should be allowed
-          vitamin_c: null, // Should be allowed
+          calcium: null,
+          vitamin_c: null, 
           cholesterol: 0
         }
       });
@@ -361,7 +352,6 @@ describe("Items API test suite", () => {
     });
   });
 
-  // Additional tests for better controller coverage
   describe("Enhanced Controller Coverage Tests", () => {
     
     describe("Create Item - Additional Edge Cases", () => {
@@ -372,7 +362,6 @@ describe("Items API test suite", () => {
           storePrices: [
             {
               storeId: testStoreId
-              // Missing price field
             }
           ]
         };
@@ -432,7 +421,7 @@ describe("Items API test suite", () => {
           storePrices: [
             {
               storeId: testStoreId,
-              prices: [{ price: 15.99 }] // Missing date
+              prices: [{ price: 15.99 }] 
             }
           ]
         };
@@ -450,7 +439,7 @@ describe("Items API test suite", () => {
           storePrices: [
             {
               storeId: testStoreId,
-              prices: [{ date: new Date() }] // Missing price
+              prices: [{ date: new Date() }] 
             }
           ]
         };
@@ -493,12 +482,10 @@ describe("Items API test suite", () => {
           .post(`${baseUrl}/analyze-receipt`)
           .attach("receiptImage", mockImageBuffer, "test-receipt.png");
 
-        // Should handle the request regardless of the AI response
         expect([200, 500]).toContain(response.statusCode);
       });
 
       test("Should handle large image files", async () => {
-        // Create a larger mock buffer
         const largeImageBuffer = Buffer.alloc(1024 * 1024, 'test'); // 1MB
 
         const response = await request(app)
@@ -547,7 +534,6 @@ describe("Items API test suite", () => {
       });
 
       test("Should handle item with multiple store prices", async () => {
-        // Create another store for testing
         const store2 = new StoreModel({
           name: "Second Test Store",
           address: "456 Second Street",
@@ -592,7 +578,7 @@ describe("Items API test suite", () => {
           name: "Invalid Nutrition Item",
           category: "Test Category",
           nutrition: {
-            protein: -5.0, // Negative value
+            protein: -5.0, 
             fat: 2.0,
             carbs: 15.0,
             calories: 100,
@@ -603,7 +589,6 @@ describe("Items API test suite", () => {
           }
         });
 
-        // This should still save since the model doesn't have min constraints, but tests the data handling
         const savedItem = await invalidNutritionItem.save();
         expect(savedItem.nutrition.protein).toBe(-5.0);
       });
@@ -611,7 +596,6 @@ describe("Items API test suite", () => {
 
     describe("Error Handling and Edge Cases", () => {
       test("Should handle concurrent operations", async () => {
-        // Test concurrent item creation
         const itemPromises = Array.from({ length: 5 }, (_, i) => {
           const item = new itemModel({
             name: `Concurrent Item ${i}`,
@@ -638,7 +622,6 @@ describe("Items API test suite", () => {
       });
 
       test("Should handle item retrieval after updates", async () => {
-        // Create, update, then retrieve item
         const originalItem = new itemModel({
           name: "Original Name",
           category: "Original Category",
@@ -656,7 +639,6 @@ describe("Items API test suite", () => {
         const saved = await originalItem.save();
         const itemId = (saved._id as mongoose.Types.ObjectId).toString();
 
-        // Update via API
         const updateResponse = await request(app)
           .put(`${baseUrl}/${itemId}`)
           .send({
@@ -666,7 +648,6 @@ describe("Items API test suite", () => {
 
         expect(updateResponse.statusCode).toBe(200);
 
-        // Retrieve via API
         const getResponse = await request(app).get(`${baseUrl}/${itemId}`);
         expect(getResponse.statusCode).toBe(200);
         expect(getResponse.body.name).toBe("Updated Name");
@@ -674,7 +655,6 @@ describe("Items API test suite", () => {
       });
 
       test("Should handle deletion and subsequent operations", async () => {
-        // Create item
         const tempItem = new itemModel({
           name: "Temp Item",
           category: "Temp Category",
@@ -692,7 +672,6 @@ describe("Items API test suite", () => {
         const saved = await tempItem.save();
         const itemId = (saved._id as mongoose.Types.ObjectId).toString();
 
-        // Delete item
         const deleteResponse = await request(app).delete(`${baseUrl}/${itemId}`);
         expect(deleteResponse.statusCode).toBe(200);
 

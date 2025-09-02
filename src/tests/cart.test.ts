@@ -12,7 +12,6 @@ beforeAll(async () => {
   const { app: initializedApp } = await initApp();
   app = initializedApp;
   
-  // Clean up test data
   await cartModel.deleteMany();
   await userModel.deleteMany();
   await itemModel.deleteMany();
@@ -24,7 +23,6 @@ afterAll(async () => {
 
 const baseUrl = "/carts";
 
-// Test data types
 type TestUser = {
   userName: string;
   email: string;
@@ -61,14 +59,11 @@ const testUser3: TestUser = {
   password: "123456",
 };
 
-// Helper function to register and login users
 const registerAndLoginUser = async (user: TestUser): Promise<TestUser> => {
-  // Register user
   await request(app)
     .post("/auth/register")
     .send(user);
 
-  // Login user
   const loginResponse = await request(app)
     .post("/auth/login")
     .send({
@@ -91,7 +86,7 @@ const createTestItem = async (): Promise<any> => {
       storeId: new mongoose.Types.ObjectId(),
       prices: [
         { date: new Date(), price: 10.99 },
-        { date: new Date(Date.now() - 86400000), price: 12.99 } // Yesterday, higher price
+        { date: new Date(Date.now() - 86400000), price: 12.99 } 
       ]
     }],
     nutrition: {
@@ -119,12 +114,10 @@ describe("Cart Test Suite", () => {
   let testCart: TestCart;
 
   beforeAll(async () => {
-    // Setup test users
     loggedInOwner = await registerAndLoginUser(testUser1);
     loggedInParticipant = await registerAndLoginUser(testUser2);
     loggedInNonParticipant = await registerAndLoginUser(testUser3);
 
-    // Create test item
     testItem = await createTestItem();
   });
 
@@ -255,7 +248,6 @@ describe("Cart Test Suite", () => {
 
     describe("GET /carts", () => {
       beforeEach(async () => {
-        // Create test carts
         testCart = {
           name: "Owner Cart",
           ownerId: loggedInOwner._id!,
@@ -265,7 +257,6 @@ describe("Cart Test Suite", () => {
         const cart = await cartModel.create(testCart);
         testCart._id = cart._id.toString();
 
-        // Create cart where user is participant
         await cartModel.create({
           name: "Participant Cart",
           ownerId: loggedInNonParticipant._id!,
@@ -439,7 +430,6 @@ describe("Cart Test Suite", () => {
         expect(response.statusCode).toBe(200);
         expect(response.body.message).toBe("Cart deleted successfully");
 
-        // Verify cart is deleted
         const deletedCart = await cartModel.findById(createdCart._id);
         expect(deletedCart).toBeNull();
       });
@@ -511,13 +501,11 @@ describe("Cart Test Suite", () => {
       });
 
       test("Should fail when adding existing participant", async () => {
-        // First add participant
         await request(app)
           .put(`${baseUrl}/${createdCart._id}/participants`)
           .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
           .send({ email: loggedInParticipant.email });
 
-        // Try to add same participant again
         const response = await request(app)
           .put(`${baseUrl}/${createdCart._id}/participants`)
           .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
@@ -597,7 +585,6 @@ describe("Cart Test Suite", () => {
 
     describe("GET /carts/price-drops", () => {
       beforeEach(async () => {
-        // Create cart with items that have price drops
         await cartModel.create({
           name: "Price Drop Cart",
           ownerId: loggedInOwner._id!,
@@ -690,17 +677,14 @@ describe("Cart Test Suite", () => {
       });
 
       test("Should allow both owner and participants to view cart", async () => {
-        // Add participant
         testCartForAuth.participants.push(new mongoose.Types.ObjectId(loggedInParticipant._id!));
         await testCartForAuth.save();
 
-        // Test owner access
         const ownerResponse = await request(app)
           .get(`${baseUrl}/${testCartForAuth._id}`)
           .set("Authorization", `Bearer ${loggedInOwner.accessToken}`);
         expect(ownerResponse.statusCode).toBe(200);
 
-        // Test participant access
         const participantResponse = await request(app)
           .get(`${baseUrl}/${testCartForAuth._id}`)
           .set("Authorization", `Bearer ${loggedInParticipant.accessToken}`);
@@ -710,7 +694,6 @@ describe("Cart Test Suite", () => {
 
     describe("Error Handling", () => {
       test("Should handle database errors gracefully", async () => {
-        // Test with malformed ObjectId
         const response = await request(app)
           .get(`${baseUrl}/invalid-object-id`)
           .set("Authorization", `Bearer ${loggedInOwner.accessToken}`);
@@ -732,14 +715,13 @@ describe("Cart Test Suite", () => {
           .send(cartData);
 
         expect(response.statusCode).toBe(201);
-        expect(response.body.notifications).toBe(true); // Should default to true
+        expect(response.body.notifications).toBe(true); 
       });
     });
   });
 
   describe("Integration Tests", () => {
     test("Should handle complete cart lifecycle", async () => {
-      // Create cart
       const createResponse = await request(app)
         .post(baseUrl)
         .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
@@ -752,7 +734,6 @@ describe("Cart Test Suite", () => {
       expect(createResponse.statusCode).toBe(201);
       const cartId = createResponse.body._id;
 
-      // Add participant
       const addParticipantResponse = await request(app)
         .put(`${baseUrl}/${cartId}/participants`)
         .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
@@ -760,7 +741,6 @@ describe("Cart Test Suite", () => {
 
       expect(addParticipantResponse.statusCode).toBe(200);
 
-      // Update cart as participant
       const updateResponse = await request(app)
         .put(`${baseUrl}/${cartId}`)
         .set("Authorization", `Bearer ${loggedInParticipant.accessToken}`)
@@ -770,7 +750,6 @@ describe("Cart Test Suite", () => {
 
       expect(updateResponse.statusCode).toBe(200);
 
-      // Remove participant
       const removeParticipantResponse = await request(app)
         .put(`${baseUrl}/${cartId}/participants/remove`)
         .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
@@ -778,14 +757,12 @@ describe("Cart Test Suite", () => {
 
       expect(removeParticipantResponse.statusCode).toBe(200);
 
-      // Delete cart
       const deleteResponse = await request(app)
         .delete(`${baseUrl}/${cartId}`)
         .set("Authorization", `Bearer ${loggedInOwner.accessToken}`);
 
       expect(deleteResponse.statusCode).toBe(200);
 
-      // Verify cart is deleted
       const getResponse = await request(app)
         .get(`${baseUrl}/${cartId}`)
         .set("Authorization", `Bearer ${loggedInOwner.accessToken}`);
@@ -794,7 +771,6 @@ describe("Cart Test Suite", () => {
     });
 
     test("Should handle concurrent cart updates", async () => {
-      // Create cart
       const cart = await cartModel.create({
         name: "Concurrent Test Cart",
         ownerId: loggedInOwner._id!,
@@ -802,7 +778,6 @@ describe("Cart Test Suite", () => {
         items: [{ productId: testItem._id.toString(), quantity: 1 }],
       });
 
-      // Simulate concurrent updates
       const update1Promise = request(app)
         .put(`${baseUrl}/${cart._id}`)
         .set("Authorization", `Bearer ${loggedInOwner.accessToken}`)
@@ -815,7 +790,6 @@ describe("Cart Test Suite", () => {
 
       const [response1, response2] = await Promise.all([update1Promise, update2Promise]);
 
-      // Both should succeed (last write wins)
       expect(response1.statusCode).toBe(200);
       expect(response2.statusCode).toBe(200);
     });

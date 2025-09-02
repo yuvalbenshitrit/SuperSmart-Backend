@@ -11,7 +11,6 @@ export const createWishlist = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Name and userId are required" });
     }
 
-    // Ensure only one wishlist per user
     const existingWishlist = await wishlistModel.findOne({ userId });
     if (existingWishlist) {
       return res.status(400).json({ error: "User already has a wishlist" });

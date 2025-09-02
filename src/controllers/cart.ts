@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import cartModel from "../models/cart";
 import userModel from "../models/user";
 import { AuthenticatedRequest } from "./auth";
-import itemModel, { IPrice } from "../models/item"; // Import IPrice
+import itemModel, { IPrice } from "../models/item"; 
 import mongoose from "mongoose"; 
 
 export const createCart = async (req: Request, res: Response) => {
@@ -97,7 +97,6 @@ export const updateCart = async (req: AuthenticatedRequest, res: Response) => {
         .json({ error: "Unauthorized to update this cart" });
     }
 
-    // Validate items in the cart
     if (req.body.items && Array.isArray(req.body.items)) {
       for (const item of req.body.items) {
         if (!item.productId || !mongoose.isValidObjectId(item.productId)) {
@@ -247,7 +246,6 @@ export const checkCartPriceDrops = async (
 
     console.log("Fetching carts for user:", userId);
 
-    // Fetch all carts for the user
     const carts = await cartModel.find({
       $or: [{ ownerId: userId }, { participants: userId }],
     });
@@ -259,7 +257,6 @@ export const checkCartPriceDrops = async (
 
     console.log(`Found ${carts.length} carts for user:`, userId);
 
-    // Collect all product IDs from the user's carts
     const productIds = carts.flatMap((cart) =>
       Array.isArray(cart.items)
         ? cart.items.map((item) => item && item.productId).filter(Boolean)
@@ -273,7 +270,6 @@ export const checkCartPriceDrops = async (
       return res.status(200).json([]);
     }
 
-    // Fetch items with price drops
     const items = await itemModel.find({ _id: { $in: productIds } }).lean();
 
     console.log("Fetched items from database:", items);
@@ -291,14 +287,13 @@ export const checkCartPriceDrops = async (
         )
           continue;
 
-        // Normalize the price objects to ensure they have a `date` field
         const normalizedPrices = storePrice.prices.map((p) => {
           const date =
             (p as IPrice).date ||
-            (isDataField(p) ? new Date(p.data) : undefined); // Use type guard for `data`
+            (isDataField(p) ? new Date(p.data) : undefined); 
           return {
             date,
-            price: parseFloat((p as IPrice).price.toString()), // Ensure price is a number
+            price: parseFloat((p as IPrice).price.toString()), 
           };
         });
 
@@ -339,7 +334,6 @@ export const checkCartPriceDrops = async (
   }
 };
 
-// Type guard to check if the object has a `data` field
 function isDataField(obj: unknown): obj is { data: string } {
   return (
     typeof obj === "object" &&

@@ -80,7 +80,7 @@ export const setupWebsockets = (server: HTTPServer) => {
             cartId,
             sender,
             message:
-              message.length > 30 ? message.substring(0, 30) + "..." : message, // Shortened message
+              message.length > 30 ? message.substring(0, 30) + "..." : message,
             timestamp: newMessage.timestamp.toISOString(),
             clientId,
           });

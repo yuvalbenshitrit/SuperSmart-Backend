@@ -4,7 +4,6 @@ import bodyParser from "body-parser";
 import wishlistRoutes from "../routes/wishlist";
 import wishlistModel from "../models/wishlist";
 
-// Mock DB connection and model
 jest.mock("../models/wishlist");
 
 const app = express();

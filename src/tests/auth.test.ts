@@ -40,7 +40,7 @@ describe("Auth test suite", () => {
     const response = await request(app)
       .post(baseUrl + "/register")
       .send(testUser);
-    expect(response.statusCode).toBe(201); // Updated to match actual response
+    expect(response.statusCode).toBe(201); 
   });
 
   test("Auth test registration no password", async () => {
@@ -67,7 +67,7 @@ describe("Auth test suite", () => {
         password: "",
       });
     expect(response.statusCode).toBe(400);
-    expect(response.body).toEqual({ error: "Missing required fields" }); // Updated to match actual response
+    expect(response.body).toEqual({ error: "Missing required fields" }); 
   });
 
   test("Auth test registration with empty email", async () => {
@@ -79,7 +79,7 @@ describe("Auth test suite", () => {
         password: "123456",
       });
     expect(response.statusCode).toBe(400);
-    expect(response.body).toEqual({ error: "Missing required fields" }); // Updated to match actual response
+    expect(response.body).toEqual({ error: "Missing required fields" }); 
   });
 
   test("Auth test registration with special characters in email", async () => {
@@ -134,7 +134,6 @@ describe("Auth test suite", () => {
       expect(response.body).toHaveProperty("refreshToken");
     });
 
-    // Verify all tokens are different
     const tokens = responses.map((r) => r.body.accessToken);
     const uniqueTokens = new Set(tokens);
     expect(uniqueTokens.size).toBe(tokens.length);
@@ -362,7 +361,7 @@ describe("Auth test suite", () => {
         password: "123456",
         userName: "Noaaaaaaaaaa",
       });
-    expect(response.statusCode).toBe(201); // Updated to match actual response
+    expect(response.statusCode).toBe(201); 
   });
 
   test("Auth test register with missing fields", async () => {
@@ -407,8 +406,8 @@ describe("Auth test suite", () => {
         userName: "",
         email: "invalid_email",
       });
-    expect(response.statusCode).toBe(500); // Updated to match actual response
-    expect(response.body.message).toBe("Internal server error"); // Updated to match actual response
+    expect(response.statusCode).toBe(500); 
+    expect(response.body.message).toBe("Internal server error"); 
   });
 
   test("Auth middleware invalid token", async () => {

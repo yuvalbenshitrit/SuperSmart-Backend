@@ -1,7 +1,6 @@
 import { sendCartEmail } from '../services/emailService';
 import nodemailer from 'nodemailer';
 
-// Mock nodemailer
 jest.mock('nodemailer', () => ({
     createTransport: jest.fn().mockReturnValue({
         verify: jest.fn().mockResolvedValue(true),
@@ -13,7 +12,6 @@ describe('Email Service', () => {
     let sendMailMock: jest.Mock;
 
     beforeEach(() => {
-        // Reset and setup the sendMail mock before each test
         sendMailMock = nodemailer.createTransport().sendMail as jest.Mock;
         sendMailMock.mockClear();
     });

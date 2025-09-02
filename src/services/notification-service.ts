@@ -1,12 +1,11 @@
 import axios from "axios";
-import { io, notifyCartPriceChanges } from "./websocket"; // Import 'io'
+import { io, notifyCartPriceChanges } from "./websocket"; 
 import cartModel from "../models/cart";
 
 
 const API_BASE_URL = process.env.DOMAIN_BASE|| "https://supersmart.cs.colman.ac.il";
 
-// Store unread message counts in memory (consider using Redis for production)
-const unreadMessages = new Map<string, Map<string, number>>(); // userId -> chatId -> count
+const unreadMessages = new Map<string, Map<string, number>>(); 
 
 interface PriceChange {
   productId: string;
@@ -103,12 +102,11 @@ export const handleChatMessage = async (messageData: {
   senderId: string;
   message: string;
   timestamp: Date;
-  participants: string[]; // Add participants to know who should receive the message
+  participants: string[]; 
 }) => {
   try {
     console.log("Handling chat message notification for chatId:", messageData.chatId);
     
-    // Emit to all users in the chat room except the sender
     io.to(messageData.chatId).except(messageData.senderId).emit('newMessage', {
       chatId: messageData.chatId,
       senderId: messageData.senderId,
@@ -116,7 +114,6 @@ export const handleChatMessage = async (messageData: {
       timestamp: messageData.timestamp
     });
 
-    // Track unread messages for offline users
     const onlineUsers = new Set<string>();
     io.sockets.sockets.forEach((socket) => {
       if (socket.data?.userId) {
@@ -124,7 +121,6 @@ export const handleChatMessage = async (messageData: {
       }
     });
 
-    // For each participant (except sender), increment unread count if they're offline
     messageData.participants.forEach((userId) => {
       if (userId !== messageData.senderId && !onlineUsers.has(userId)) {
         incrementUnreadCount(userId, messageData.chatId);
@@ -171,7 +167,6 @@ export const onUserLogin = (userId: string) => {
     const totalUnread = Object.values(unreadCounts).reduce((sum, count) => sum + count, 0);
     
     if (totalUnread > 0) {
-      // Find the user's socket and send unread notifications
       io.sockets.sockets.forEach((socket) => {
         if (socket.data?.userId === userId) {
           socket.emit('unreadMessages', {
@@ -189,7 +184,6 @@ export const onUserLogin = (userId: string) => {
 
 export const joinChatRoom = (userId: string, chatId: string) => {
   try {
-    // Join the user to the chat room
     io.sockets.sockets.forEach((socket) => {
       if (socket.data?.userId === userId) {
         socket.join(chatId);
@@ -203,7 +197,6 @@ export const joinChatRoom = (userId: string, chatId: string) => {
 
 export const leaveChatRoom = (userId: string, chatId: string) => {
   try {
-    // Remove user from chat room
     io.sockets.sockets.forEach((socket) => {
       if (socket.data?.userId === userId) {
         socket.leave(chatId);

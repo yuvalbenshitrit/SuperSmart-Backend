@@ -1,5 +1,5 @@
 import request from "supertest";
-import initApp from "../server"; // Make sure initApp connects to the DB
+import initApp from "../server"; 
 import mongoose from "mongoose";
 import { Express } from "express";
 

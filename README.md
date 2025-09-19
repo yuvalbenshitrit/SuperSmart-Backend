@@ -1,4 +1,4 @@
-ש
+
 SuperSmart – Backend
 
 SuperSmart is the server-side application of a smart grocery shopping comparison platform.
@@ -46,7 +46,7 @@ Price Tracking APIs
 
 ⚙️ Installation & Running Locally
 # Clone repository
-git clone https://github.com/noagedo/SuperSmart-server.git
+git clone https://github.com/yuvalbenshitrit/SuperSmart-Backend.git
 
 cd supersmart-backend
 
